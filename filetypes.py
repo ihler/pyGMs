@@ -181,12 +181,14 @@ def writeUai(filename, factors):
     fp.write(" ".join(map(str,dim)) + "\n")  # write dimensions of each variable
     fp.write("\n")                     # (extra line)
    
-    fp.write("{:d}\n", len(factors))   # number of factors
+    fp.write("{:d}\n".format(len(factors))); # number of factors
     for f in factors:                  # + cliques
-      fp.write("{:d} ".format(f.nvar) + " ".join(map(str,f.vars[::-1])) + "\n")
+      i#fp.write("{:d} ".format(f.nvar) + " ".join(map(str,f.vars[::-1])) + "\n")
+      fp.write("{:d} ".format(f.nvar) + " ".join(map(str,f.vars)) + "\n")
     fp.write("\n")                     # (extra line)
     for f in factors:                  # factor tables
-      fp.write("{:d} ".format(f.numel) + " ".join(map(str,f.t[:])) + "\n")
+      #fp.write("{:d} ".format(f.numel()) + " ".join(map(str,f.t.ravel(order=orderMethod))) + "\n")
+      fp.write("{:d} ".format(f.numel()) + " ".join(map(str,f.t.ravel(order='C'))) + "\n")
 
  
 

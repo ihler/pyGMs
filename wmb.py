@@ -22,7 +22,8 @@ class WMB:
 from .factor import *
 from .graphmodel import *
 
-
+from itertools import izip
+reverse_enumerate = lambda l: izip(xrange(len(l)-1, -1, -1), reversed(l))
 
 class WMB(object):
     '''Class implementing weighted mini-bucket elimination inference'''
@@ -58,9 +59,10 @@ class WMB(object):
 
         # create & process elimination ordering of the model:
         if elimOrder is None: elimOrder = 'wtminfill'
-        if type(elimOrder) is str:
-            # TODO: check that weights is string or float?
-            raise NotImplementedError  # TODO: call elimination order with method
+        if type(elimOrder) is str:   # auto elim order: check that weights is string or float
+            if not type(weights) in {float, str}:
+              raise ValueError("Must specify elimination order or use all-equal weights (float or string)"); 
+            elimOrder = eliminationOrder(self.model, orderMethod=elimOrder); 
         self.elimOrder = elimOrder
         self.priority = [-1 for i in range(model.nvar)]  # build priority of each var
         for i,x in enumerate(elimOrder): self.priority[x] = i
@@ -68,6 +70,7 @@ class WMB(object):
         # now build the mini-bucket data structure
         self.buckets = [ [] for x in range(model.nvar) ]  # bucket for each var: list of minibuckets 
         self.matches = [ [] for x in range(model.nvar) ] # matching sets for each bucket
+        self.setWeights(weights)   # TODO: duplicate to initialize (!)
         for f in model.factors:
             n = self.addClique(f.vars)
             n.theta += f.log()                 # include log f(x) in node's log-factor
@@ -83,9 +86,9 @@ class WMB(object):
         For more general bounds, weights = list of floats (one per variable)
         """
         if type(weights) is str:
-            if weights == 'sum+': weights = 1.0
-            elif weights=='sum-': weights = -1.0
-            elif weights=='max+': weights = 0.0
+            if weights == 'sum+': weights =  1.0;
+            elif weights=='sum-': weights = -1.0;
+            elif weights=='max+': weights = 1e-8;
             else: raise ValueError("Unknown weight / task type; must be max+, sum+, sum-, or float / float list")
         if type(weights) is float: weights = WMB.ConstantList(weights)
         self.weights = weights
@@ -94,7 +97,7 @@ class WMB(object):
             ni = len(self.buckets[i])
             for j in range(ni):               # set uniformly
                 self.buckets[i][j].weight = self.weights[xi]/ni
-            if self.weights[xi] < 0:          # uniform for lower bound:
+            if self.weights[xi] < 0 and ni > 0:          # uniform for lower bound:
                 self.buckets[i][0].weight = 1.0 - self.weights[xi]*(ni-1)/ni
 
 
@@ -112,10 +115,10 @@ class WMB(object):
         for i,b in enumerate(self.buckets):
             to_return += "{:03d}: ".format(int(self.elimOrder[i]))
             for j,mb in enumerate(b):
-                to_return += "{!s} => {}; ".format(mb, self.__nodeID(mb.parent))
+                to_return += "{!s}^{:.2f} => {}; ".format(mb,mb.weight, self.__nodeID(mb.parent))
             to_return += "\n"
         return to_return
-        
+
 
     def addClique(self,vars):
         """Add a clique with scope "vars", fixing up structure to be a valid MB tree"""
@@ -145,7 +148,7 @@ class WMB(object):
             if not found:                          # 
                 n = WMB.Node()
                 n.clique = VarSet(vs)
-                n.weight = 0.0
+                n.weight = -1e-10 if self.weights[x] < 0 else 1e-10;   # TODO: small non-zero weights
                 #print "adding ",n," to ",self.priority[x]
                 b.append(n)
                 if len(added) > 0:                 #   then, last added node is the child of this one
@@ -295,7 +298,7 @@ class WMB(object):
         """Compute a backward pass through all nodes
            If beliefs is a list of cliques, returns the estimated beliefs on those cliques
         """
-        to_save = [ [] ]*len(self.buckets)
+        to_save = [[] for i in range(len(self.buckets))]
         if beliefs is None:
             return_beliefs = {}
         else:
@@ -303,7 +306,7 @@ class WMB(object):
             # map cliques to buckets for checking
             for clique in beliefs:
                 to_save[ min([self.priority[x] for x in clique]) ].append(VarSet(clique))
-        for i,b in reversed(list(enumerate(self.buckets))):
+        for i,b in reverse_enumerate(self.buckets): #reversed(list(enumerate(self.buckets))):
             X = self.model.vars[ self.elimOrder[i] ]
             nNodes = len(b)
             beliefs_b = [ None for mb in b ]
@@ -345,9 +348,9 @@ class WMB(object):
         """Perform a backward pass through all nodes, assigning the most likely value"""
         # TODO check & test  ; check for zero weights? (don't care?)
         x = {}
-        for i,b in reversed(list(enumerate(self.buckets))):
+        for i,b in reverse_enumerate(self.buckets): #reversed(list(enumerate(self.buckets))):
             X = self.model.vars[ self.elimOrder[i] ]
-            bel = Factor(X,0.0)
+            bel = Factor([X],0.0)
             for j,mb in enumerate(b):
                 bel += mb.theta.condition(x)
                 for c in mb.children: bel += c.msgFwd.condition(x)
@@ -365,9 +368,9 @@ class WMB(object):
         # TODO check for positive, unit sum weights?  (don't care?)
         x = {}
         logQx = 0.0
-        for i,b in reversed(list(enumerate(self.buckets))):
+        for i,b in reverse_enumerate(self.buckets): #reversed(list(enumerate(self.buckets))):
             X = self.model.vars[ self.elimOrder[i] ]
-            qi = Factor(X,0.0)
+            qi = Factor([X],0.0)
             for j,mb in enumerate(b):
                 qij = mb.theta.condition(x)
                 qij -= mb.msgFwd if mb.parent is None else mb.msgFwd.condition(x)
@@ -375,7 +378,6 @@ class WMB(object):
                 qij -= qij.max()
                 qij *= 1.0 / mb.weight
                 qij.expIP()
-                #if qij.sum() == 0.0: qij += 1.0/qij.numel()  # TODO: safety check needed?
                 qij *= mb.weight
                 qi += qij
             qi /= qi.sum()   # normalize (should be already)

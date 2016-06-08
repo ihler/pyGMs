@@ -34,14 +34,14 @@ class GraphModel(object):
     # TODO: finish
     return "Graphical model: {} vars, {} factors".format(self.nvar,self.nfactors)
 
-  def __init__(self, factorList=None):
+  def __init__(self, factorList=None, copy=True):
     """Create a graphical model object from a factor list.  Maintains local copies of the factors."""
     self.X = []
     self.factors = factorSet()
     self.factorsByVar = []
-    if not (factorList is None): self.addFactors(factorList)
     self.lock = False
     self.sig = 0
+    if not (factorList is None): self.addFactors(factorList, copy=copy)
     
 
   def addFactors(self,flist,copy=True):
@@ -58,6 +58,7 @@ class GraphModel(object):
         if self.X[v].states == 0: self.X[v] = v   # copy variable info if undefined, then check:
         if self.X[v].states != v.states: raise ValueError('Incorrect # of states',v,self.X[v])
         self.factorsByVar[v].add(f)
+    self.sig = np.random.rand()     # TODO: check if structure is / can be preserved?
 
   def removeFactors(self,flist):
     """Remove factors from the model; e.g. removeFactors(factorsWith([0])) removes all factors involving x0"""
@@ -65,6 +66,7 @@ class GraphModel(object):
     for f in flist:
       for v in f.vars:
         self.factorsByVar[v].discard(f)
+    self.sig = np.random.rand()     # TODO: check if structure is / can be preserved?
 
   def makeCanonical(self):
     """Add/merge factors to make a canonical factor graph: singleton factors plus maximal cliques"""
@@ -161,6 +163,7 @@ class GraphModel(object):
 
   def condition2(self, vs, xs):
     """Condition / clamp the graphical model on the partial configuration vs=xs (may be lists)"""
+    if len(vs)==0: return
     constant = 0.0
     for f in self.factorsWithAny(vs): 
       self.removeFactors([f])
@@ -171,7 +174,7 @@ class GraphModel(object):
     # Simpler: track modified factors; get factorsWithAll(f.vars).largest() and merge into that
     constant = np.exp(constant / len(vs))
     for i,v in enumerate(vs):    # add delta f'n factor for each variable
-      f = Factor(v,0.0)
+      f = Factor([v],0.0)
       f[xs[i]] = constant        # assignment is nonzero; distribute constant value into these factors
       self.addFactors([f])
 
@@ -182,6 +185,12 @@ class GraphModel(object):
   def eliminate(self, elimVars, elimOp):
     """Eliminate (remove) a set of variables; elimOp(F,v) should eliminate variable v from factor F."""
     if isinstance(elimVars,Var)|isinstance(elimVars,int): elimVars = [elimVars]   # check for single-var case
+    if type(elimOp) is str:    # Basic elimination operators can be specified by a string
+        if   elimOp.lower() == "sum": elimOp = lambda F,X: F.sum(X)
+        elif elimOp.lower() == "lse": elimOp = lambda F,X: F.lse(X)
+        elif elimOp.lower() == "max": elimOp = lambda F,X: F.max(X)
+        elif elimOp.lower() == "min": elimOp = lambda F,X: F.min(X)
+        else: raise ValueError("Unrecognized elimination type {}; 'sum','lse','max','min' or custom function".format(elimOp));
     for v in elimVars:
       F = Factor([],1.0)
       for f in self.factorsWith(v): 
@@ -322,9 +331,6 @@ class GraphModel(object):
 
 # gibbs, MH (?), ... trainCD?
 
-# orderings
-# inducedWidth, depth, pseudotree, ...
-
 
 #class MRF:
 #
@@ -354,7 +360,7 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=float('inf'), prior
   elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStates() for Xk in adj[Xj]])
   elif orderMethod == 'minwidth':   score = lambda adj,Xj: len(adj[Xj])
   elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStates()
-  elif orderMethod == 'random':     score = lambda adj,Xj: np.random()
+  elif orderMethod == 'random':     score = lambda adj,Xj: np.random.rand()
   else: raise ValueError('Unknown ordering method: {}'.format(orderMethod))
 
   adj = [ VarSet([Xi]) for Xi in gm.X ]
@@ -379,7 +385,7 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=float('inf'), prior
       Pi,Si,Xi = scores[pick]
     del scores[pick]
     _order[idx] = Xi        # write into order[idx] = Xi
-    totalSize += adj[Xi].nrStates()
+    totalSize += adj[Xi].nrStatesDouble()
     if totalSize > cutoff: return target,cutoff  # if worse than cutoff, quit with no changes to "target"
     fix = VarSet()
     for Xj in adj[Xi]:
@@ -398,12 +404,52 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=float('inf'), prior
   return _order,totalSize
     
 
+class PseudoTree(object):
+  """Represent the pseudo-tree of a graphical model, given elimination ordering
+     pt.parent[x] = earliest parent of x in the pseudotree
+     pt.width     = width (largest clique) in the tree
+     pt.depth     = depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain
+     pt.size      = total # of operations (sum of clique sizes) for the elimination process
+  """
+  def __init__(self,model,elimOrder,force_or=False):
+    """Build the pseudotree. Set force_or=True to force an or-chain pseudotree."""
+    self.order  = elimOrder;
+    self.parent = [None]*len(elimOrder);
+    self.width = 0;
+    self.depth = 0;
+    self.size  = 0.0;
+    height = [0]*len(elimOrder);
+   
+    adj = [ VarSet([Xi]) for Xi in model.X ]   # build MRF  (TODO: make function)
+    for Xi in model.X:
+      for f in model.factorsWith(Xi):
+        adj[Xi] |= f.vars
+    
+    for i,x in enumerate(elimOrder):
+      nbrs = adj[x];      # when we eliminate x,
+      for y in nbrs:      #   we connect all its neighbors to each other
+        adj[y] |= nbrs;
+        adj[y] -= [x,y];
+      self.width  = max(self.width, len(nbrs));   # update width statistic
+      self.size  += nbrs.nrStatesDouble()         #   and total size statistic
+      if not force_or:    # and-or tree: find earliest eliminated neighbor  (TODO: use min priority)
+        for j,y in enumerate(elimOrder[i+1:]):
+          if y in nbrs: 
+            self.parent[x] = y;
+            break;
+      else:               # force or-tree (chain) pseudotree
+        if i != len(elimOrder)-1: self.parent[x] = elimOrder[i+1];
+      if self.parent[x] is not None:
+        height[self.parent[x]] = max(height[self.parent[x]], height[x]+1);
+
+    self.depth = max(height);
+
+
 ### TODO
 # Useful ordering operations?
-#  Reorder to minimize memory if cleared sequentially?
+#  Reorder to minimize memory if cleared sequentially?  Calc such requirement?
 #  Reorder to root jtree at clique?
 #  Reorder to minimize depth?
-#  Compute pseudo-tree from graph, order
 #  
 
 
@@ -449,6 +495,11 @@ def factorOrder(factors, varOrder):
   return factorOrder
   
 
+################################################################################################
+# Basic sampling procedures: 
+# Should sample from p(x) if it is a Bayes net with known topological ordering
+# Sample from some simple proposal based on the factors of p(x) if not.
+
 #
 # TODO: forward sample: draw each x; track normalization constant (in case non-norm'd) & scalar f'ns; return x,w
 #   => rejection sampling?  importance sampling? others?
@@ -465,6 +516,9 @@ def factorOrder(factors, varOrder):
 
 #def forwardSample(model, varOrder, factorOrder=None):
 def sampleSequential(model, varOrder, factorOrder=None):
+  """sampleSequential: draw a configuration sequentially from the model factors.
+       Returns xs,logQ  (tuple): the sampled config and its log-probability under the sampling distribution
+  """
   if factorOrder is None: factorOrder = []
   if len(factorOrder)==0:
     raise NotImplementedError
@@ -490,8 +544,6 @@ def sampleSequential(model, varOrder, factorOrder=None):
    
 
 
-
-
 def bnSample(model, order):
   """Draw a sample from a Bayes net model with given topo order """
   # TODO: fix
@@ -506,4 +558,40 @@ def bnSample(model, order):
     x[i], = Pi.sample()    # returns length-1 tuple; save value in config x
   #print "Sample from p(x): " + str( x )
   return x
+
+################################################################################################
+# "Vectorize" the model parameters (log factor values), in overcomplete exponential family form.
+# "features" is a set of base factors used to determine the size & arrangement of the vector
+# "factors" are the model factors to conver to the vector representation
+# "theta" is the resulting log-vector
+
+def vectorize(factors, features, default=0.0):
+  """Return a vectorization of the model with "factors", under the specified set of base features"""
+  model = GraphModel(features, copy=False)  # create model with references to feature factors
+  idx = {};
+  t = 0;
+  for u in model.factors:
+    idx[u] = slice(t,t+u.numel());  # save location of this factor's features in the full vector
+    t += u.numel()
+  theta = np.zeros((t,))+default;           # allocate storage for vectorization
+  for f in factors:
+    u = model.factorsWithAll(f.vars)[0]; # get smallest feature set that can contain this factor
+    theta[idx[u]] += f.log().table.ravel(order=orderMethod);   # and add the factor to it
+  return theta
+
+def devectorize(theta, features, default=0.0):
+  """Return a vectorization of the model with "factors", under the specified set of base features"""
+  t = 0;
+  factors = []
+  for u in features:
+    fnext = Factor(u.vars, theta[t:t+u.numel()]);
+    t += u.numel();
+    if (fnext-default).abs().sum() > 0.0:
+      factors.append( fnext.expIP() );
+  return factors
+
+################################################################################################
+
+
+
 
