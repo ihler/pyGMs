@@ -17,30 +17,41 @@ from sortedcontainers import SortedSet as sset;
 from .factor import *
 
 
-def readFileByTokens(path, specials=[]):
-  """
-  Helper function for file IO
-  Iterator to read from file byte by byte, splitting into tokens at spaces or elements of "specials"
-  """
-  #TODO: add support for comment / ignore-content format?  (/* comment */, # comment, etc)
-  with open(path, 'r') as fp:
-    buf = []
-    while True:
-      ch = fp.read(1)
-      if ch == '':
-        break
-      elif ch in specials:
-        if buf:
-          yield ''.join(buf)
-        buf = []
-        yield ch
-      elif ch.isspace():
-        if buf:
-          yield ''.join(buf)
-          buf = []
-      else:
-        buf.append(ch)
+#def OLDreadFileByTokens(path, specials=[]):
+#  """
+#  Helper function for file IO
+#  Iterator to read from file byte by byte, splitting into tokens at spaces or elements of "specials"
+#  """
+#  #TODO: add support for comment / ignore-content format?  (/* comment */, # comment, etc)
+#  with open(path, 'r') as fp:
+#    buf = []
+#    while True:
+#      ch = fp.read(1)
+#      if ch == '':
+#        break
+#      elif ch in specials:
+#        if buf:
+#          yield ''.join(buf)
+#        buf = []
+#        yield ch
+#      elif ch.isspace():
+#        if buf:
+#          yield ''.join(buf)
+#          buf = []
+#      else:
+#        buf.append(ch)
 
+
+def readFileByTokens(path, specials=[]):
+  import re
+  spliton = '([\s'+''.join(specials)+'])'
+  with open(path, 'r') as fp:
+    for line in fp:
+      tok = re.split(spliton,line)[:-1]
+      for t in tok: 
+        t = t.strip()
+        if t != '':
+          yield t
 
 
 #class FileTokenizer:
@@ -88,7 +99,7 @@ def readUai(filename):
   factors = []        # the factors themselves
   evid = {}           # any evidence  (TODO: remove)
 
-  gen = readFileByTokens(filename)   # get token generator for the UAI file
+  gen = readFileByTokens(filename,'(),')   # get token generator for the UAI file
   type = next(gen)                   # read file type = Bayes,Markov,Sparse,etc
   nVar = int(next(gen))              # get the number of variables
   for i in range(nVar):              #   and their dimensions (states)
@@ -106,13 +117,18 @@ def readUai(filename):
     vs = VarSet(cliques[c])
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
-    factorSize = tuple(d for d in (v.states for v in cliques[c])) if len(cliques[c]) else (1,)
+    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
     pi = list(map(lambda x:vs.index(x), cliques[c])) 
     ipi = list(pi)                   # get permutation mapping: file's order to sorted order
     for j in range(len(pi)):         #   (ipi = inverse permutation)
       ipi[pi[j]] = j
     #print 'Building %s : %s,%s : %s'%(cliques[c],factorSize,vs,tSize)
-    for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
+    #
+    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
+    t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
+    factors[-1].table = np.array(t2,dtype=float,order='F')
+    #
+    if False: # for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
       tok = next(gen)
       #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
       if (tok == '('):               # check for "sparse" (run-length) representation
@@ -223,7 +239,7 @@ def readErgo(filename):
     vs = VarSet(cliques[c])
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
-    factorSize = tuple(d for d in (v.states for v in cliques[c])) if len(cliques[c]) else (1,)
+    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
     pi = list(map(lambda x:vs.index(x), cliques[c]))
     ipi = list(pi)                   # get permutation mapping: file's order to sorted order
     for j in range(len(pi)):         #   (ipi = inverse permutation)

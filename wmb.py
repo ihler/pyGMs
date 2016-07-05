@@ -148,7 +148,7 @@ class WMB(object):
             if not found:                          # 
                 n = WMB.Node()
                 n.clique = VarSet(vs)
-                n.weight = -1e-10 if self.weights[x] < 0 else 1e-10;   # TODO: small non-zero weights
+                n.weight = -1e-3 if self.weights[x] < 0 else 1e-3;   # TODO: small non-zero weights
                 #print "adding ",n," to ",self.priority[x]
                 b.append(n)
                 if len(added) > 0:                 #   then, last added node is the child of this one
@@ -167,6 +167,7 @@ class WMB(object):
                     n.theta += mb.theta                # join log-factors into new node
                     n.originals.extend(mb.originals)   # move original factor pointers to new node
                     b.remove(mb)
+                #n.theta += Factor(n.clique,0.0);  # need to do this at some point to ensure correct elim
                 # TODO: fix up match structure?
         # done adding all required cliques; return 1st 
         return added[0]
@@ -236,6 +237,7 @@ class WMB(object):
                     for j,mb in enumerate(b):
                         beliefs[j] = mb.theta + mb.msgBwd
                         for c in mb.children: beliefs[j] += c.msgFwd
+                        if beliefs[j].nvar < len(mb.clique): beliefs[j] += Factor(mb.clique - beliefs[j].vars,0.0);
                         beliefs[j] *= 1.0/mb.weight
                         beliefs[j] -= beliefs[j].lse()
                 # Then, update theta (parameterization) on each set in "matches"
@@ -248,14 +250,21 @@ class WMB(object):
                         for mb in match[1:]: vAll &= mb.clique
                         delta = [None for mb in match]
                         avg_belief = Factor().log()
+                        #print "Bucket",b
+                        #print match
+                        #print vAll
                         for j,mb in enumerate(match):
                             delta[j] = beliefs[j].lse( mb.clique - vAll )  # TODO: belief[j] incorrect if match != b
+                            #print mb.theta.table #delta[j].table
                             avg_belief += delta[j] * mb.weight / wTotal
+                        #print avg_belief.table
+                        #print "==="
                         for j,mb in enumerate(match):
                             delta[j] = avg_belief - delta[j]
                             beliefs[j] += delta[j] * stepTheta
                             beliefs[j] -= beliefs[j].lse()
                             mb.theta += delta[j] * mb.weight * stepTheta
+                            #print mb.theta.table
                 # Last, update weights if desired:
                 if stepWeights:
                     isLower=(self.weights[i] == -1) # TODO: a bit difficult; needs to know weight constraints (+1/0/-1, etc.)
@@ -286,6 +295,7 @@ class WMB(object):
             for j,mb in enumerate(b):
                 beliefs[j] = mb.theta.copy()      # Alternative? do by re-subtracting msgBwd?
                 for c in mb.children: beliefs[j] += c.msgFwd
+                if beliefs[j].nvar < len(mb.clique): beliefs[j] += Factor(mb.clique - beliefs[j].vars,0.0);
                 mb.msgFwd = beliefs[j].lsePower([X], 1.0/mb.weight)
                 beliefs[j] = Factor().log() # clear reference & memory? 
                 if mb.parent is None:       # add roots to overall bound
@@ -302,7 +312,7 @@ class WMB(object):
         if beliefs is None:
             return_beliefs = {}
         else:
-            return_beliefs = { tuple(clique): None for clique in beliefs }
+            return_beliefs = { clique: None for clique in beliefs }
             # map cliques to buckets for checking
             for clique in beliefs:
                 to_save[ min([self.priority[x] for x in clique]) ].append(VarSet(clique))
@@ -327,20 +337,87 @@ class WMB(object):
                 beliefs_b[j] = mb.theta + mb.msgBwd
                 for c in mb.children: beliefs_b[j] += c.msgFwd
                 #beliefs_b[j] -= beliefs_b[j].lse()
+                #if mb.weight > 0:
                 beliefs_b[j] -= beliefs_b[j].max()
+                #else:
+                #    beliefs_b[j] -= beliefs_b[j].min()   # invert if negative? TODO?
                 beliefs_b[j] *= 1.0 / mb.weight
                 for c in mb.children:
                     c.msgBwd = beliefs_b[j].lse( mb.clique - c.clique )*c.weight - c.msgFwd
+                    #c.msgBwd -= c.msgBwd.max()   # TODO normalize for convenience?
                     #c.msgBwd = (beliefs_b[j]*(1.0/mb.weight)).lse( mb.clique - c.clique )*c.weight - c.msgFwd
                 # TODO: compute marginal of any to_save[i] cliques that fit & not done
                 for c in to_save[i]:
-                    if c <= mb.clique and return_beliefs[tuple(c)] is None: return_beliefs[tuple(c)] = beliefs_b[j].lse( mb.clique - c )
+                    if c <= mb.clique and return_beliefs[c] is None: return_beliefs[c] = beliefs_b[j].lse( mb.clique - c )
                 beliefs_b[j] = Factor().log() # clear out belief
         for c,f in return_beliefs.items(): 
             f -= f.lse()
             f.expIP()   # exponentiate and normalize beliefs before returning
             #f /= f.sum()
         return return_beliefs
+
+
+
+    def gdd_update(self,maxstep=1.0,threshold=0.01):
+        def wt_elim(f,w,pri):
+            elim_ord = np.argsort( [pri[x] for x in f.vars] )
+            tmp = f.copy();
+            for i in elim_ord:
+              tmp = tmp.lsePower([f.v[i]],1.0/w[i])
+            return tmp
+        def calc_bound( thetas, weights, pri):
+            return sum([wt_elim(th,wt,pri) for th,wt in zip(thetas,weights)])
+        def mu(th,w,pri):
+            elim_ord = np.argsort( [pri[x] for x in th.vars] )
+            lnZ0 = th
+            lnmu = 0.0
+            for i in elim_ord:
+              lnZ1 = lnZ0.lsePower([th.v[i]],1.0/w[i])
+              lnmu = lnmu + (lnZ0 - lnZ1)*(1.0/w[i])
+              lnZ0 = lnZ1
+            return lnmu.expIP()
+        def armijo(thetas,weights,pri,maxstep,threshold,direction):
+            f0 = calc_bound(thetas,weights,pri)
+            #print [th for th in thetas], f0
+            match = reduce(lambda a,b: a&b, [th.vars for th in thetas], thetas[0].vars)
+            mus = [mu(th,wt,pri).marginal(match) for th,wt in zip(thetas,weights)]
+            dL = [mus[0]-mus[i] for i in range(len(mus))]
+            dL[0] = -sum(dL)
+            gradnorm = sum([ (df**2.0).sum() for df in dL ])
+            for j in range(10):
+              newthetas = [th+(direction*maxstep*df) for th,df in zip(thetas,dL)]   # redo; modify df directly
+              f1 = calc_bound(newthetas,weights,pri)
+              #print "  ",f0," => ",f1, "  (",f0-f1,' ~ ',maxstep*threshold*gradnorm,")"
+              if (f0 - f1)*direction > maxstep*threshold*gradnorm:
+                for th,nth in zip(thetas,newthetas): th.t[:]=nth.t   # rewrite tables
+                return
+              else:
+                maxstep *= 0.5
+            return # give up?
+        ######
+        bound = 0.0
+        for i,b in enumerate(self.buckets):
+            for j,mb in enumerate(b):   # make sure has the correct scope (TODO: required?)
+              if mb.theta.nvar < len(mb.clique): mb.theta += Factor(mb.clique - mb.theta.vars,0.0)
+        for i,b in enumerate(self.buckets):
+            X = self.model.vars[ self.elimOrder[i] ]
+            nNodes = len(b)
+            thetas = [mb.theta for mb in b]
+            eps = 1e-3 * self.weights[i]    # TODO: doesn't work with mixed weight signs
+            weights = [ [eps for x in mb.theta.vars] for mb in b ]
+            for j,mb in enumerate(b): weights[j][mb.theta.vars.index(X)] = mb.weight
+            armijo(thetas,weights,self.priority,maxstep,threshold,np.sign(eps))
+            for j,mb in enumerate(b):
+              if mb.parent is not None:
+                thetas2 = [mb.theta, mb.parent.theta]
+                pi,pj = self.__nodeID(mb.parent)
+                weights2 = [ weights[j], [1e-3*self.weights[pi] for x in mb.parent.theta.vars] ]
+                weights2[1][mb.parent.theta.vars.index(self.model.vars[self.elimOrder[pi]])] = mb.parent.weight
+                armijo(thetas2,weights2,self.priority,maxstep,threshold,np.sign(eps))  # TODO: mixed?
+              bound += calc_bound([mb.theta],[weights[j]],self.priority)
+        return float(bound)
+
+
 
 
     # TODO: rename greedy-assign?  Add optional partial config?
@@ -418,6 +495,7 @@ class JTree(WMB):
         super(JTree,self).__init__(model,elimOrder=elimOrder,weights=weights)
         self.merge(lambda a,b: 1.0)    # merge until exact 
         self.forwardDone = False
+        self.setWeights(weights)
 
     def msgForward(self):
         return_value = super(JTree,self).msgForward()

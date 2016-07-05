@@ -10,11 +10,13 @@ Version 0.0.1 (2015-09-28)
 import operator as operator
 import numpy as np
 from sortedcontainers import SortedSet;
+from sortedcontainers import SortedListWithKey;
 
 from .factor import *
 
 # Make a simple sorted set of factors, ordered by clique size, then lexicographical by scope
-def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
+def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
+#def factorSet(it=None): return SortedListWithKey(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
 # So, fs = factorSet([list]) will make sure:
 #   fs[0] is a minimal factor (smallest # of variables) and fs[-1] is a maximal factor (largest # of variables)
 
@@ -46,8 +48,8 @@ class GraphModel(object):
 
   def addFactors(self,flist,copy=True):
     """Add a list of factors to the model; factors are copied locally unless copy=False explicitly used"""
-    import copy
-    if (copy): flist = copy.deepcopy(flist)  # create new factor copies that this model "owns"
+    import copy as pcopy
+    if (copy): flist = pcopy.deepcopy(flist)  # create new factor copies that this model "owns"
     self.factors.update(flist);   # add factor to set of all factors, and to by-variable indexing
     for f in flist:
       # TODO: if constant do something else?  (Currently just leave it in factors list)
@@ -80,8 +82,10 @@ class GraphModel(object):
     """Merge factors to make a minimal factor graph: retain only factors over maximal cliques"""
     for f in self.factors:
       fs = self.factorsWithAll(f.vars)
+      largest = fs[-1]
       if (fs[-1] != f):
-        fs[-1] *= f
+        largest *= f
+        #fs[-1] *= f
         self.removeFactors([f])
 
 
@@ -131,7 +135,41 @@ class GraphModel(object):
     isTableCSP = lambda t : all( [ ((v==0.0) | (v==1.0)) for v in np.nditer(t) ] )
     return all( [isTableCSP(f.table) for f in self.factors] )
 
-  #def isBN(self, order):  # Check whether the model is a valid Bayes Net with topo order "order"
+  def isBN(self, tol=1e-6):  # Check whether the model is a valid Bayes Net (with topo order "order"?)
+    """check whether the graphical model is a valid Bayes net (one CPT per variable) """
+    if True: #order is None:
+      temp = GraphModel(self.factors, copy=False)  # slow? unnecessary?
+      topo_order = [-1]*self.nvar
+      pri = [-1]*self.nvar
+      for i in range(self.nvar):
+        if temp.factors[0].nvar != 1: return False
+        X = temp.factors[0].vars[0]
+        topo_order[i] = X
+        pri[X] = i
+        withX = temp.factorsWith(topo_order[i])
+        temp.removeFactors(withX)
+        temp.addFactors( [f.condition2([X],[0]) for f in withX if f.nvar > 1] )
+    #else:
+    #  pri = [-1]*len(order)
+    #  for i,x in enumerate(order): pri[x]=i
+    for f in self.factors:
+      X = f.vars[ np.argmax([pri[x] for x in f.vars]) ]
+      tmp = f.sum([X])
+      tmp -= 1.0
+      try:
+        tmp = tmp.absIP().max()
+      except:
+        tmp = abs(tmp)
+      if tmp > tol: return False
+    return True
+ 
+    
+    
+    pass
+  # find factors with only one variable
+  # add those to topo order as roots
+  # remove from other factors & repeat
+  # 
   # TODO
   # convert order to priority listing; found = [0 for x in X]
   # run through factors, computing highest priority in each

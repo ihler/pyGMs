@@ -258,13 +258,13 @@ class testGraphModel(unittest.TestCase):
     ord = [85,41,35,65,47,8,48,58,24,77,55,39,32,30,6,76,80,97,83,59,18,23,38,87,91,81,21,68,29,64,27,9,19,10,11,90,71,88,20,99,0,22,94,37,16,63,17,70,86,13,43,31,1,95,69,96,36,51,4,34,56,15,53,42,28,92,49,74,98,14,45,26,84,40,33,2,73,12,25,60,93,78,46,61,44,89,3,7,54,57,52,50,66,72,62,67,79,82,75,5]
     sumElim = lambda F,Xlist: F.sum(Xlist)
     model.eliminate(ord,sumElim)
-    self.assertTrue( eq_tol(model.joint().log(), Factor([],-20.477081), tol) )
+    self.assertTrue( eq_tol(model.joint().log(), Factor([],-20.477081), tol) , "lnZ {} != -20.477081".format(model.joint().log()))
     
     model = GraphModel(factors)
     model.condition(evid)
     maxElim = lambda F,Xlist: F.max(Xlist)
     model.eliminate(ord,maxElim)
-    self.assertTrue( eq_tol(model.joint().log(), Factor([],-45.105018), tol) ) 
+    self.assertTrue( eq_tol(model.joint().log(), Factor([],-45.105018), tol) , "lnF {} != -45.105018".format(model.joint().log())) 
 
 
   def testUaiBN0_JTree(self):
@@ -276,18 +276,18 @@ class testGraphModel(unittest.TestCase):
     from pyGM.wmb import JTree as JTree
     jt = JTree(model,ord)      # build a junction tree and compute lnZ, p(X13,X53)
     lnZ = jt.msgForward()
-    self.assertTrue( abs(lnZ - -20.477081) < tol ) 
+    self.assertTrue( abs(lnZ - -20.477081) < tol , "lnZ {} != -20.477081".format(lnZ)) 
     bel = jt.beliefs( [f.vars for f in model.factors] )
     res = Factor([model.X[13],model.X[53]],[[ 0.29651202,  0.02847118], [ 0.15811528,  0.51690152]])
     #print bel[tuple(res.vars)].table
     #print res.table
-    self.assertTrue( eq_tol( bel[tuple(res.vars)], res, tol) )
+    self.assertTrue( eq_tol( bel[res.vars], res, tol) )
     xdraw,lnP = jt.sample()    # draw a sample and check its probability under the model
     self.assertTrue( abs(lnP + -20.477081 - model.logValue(xdraw)) < tol ) 
     
     jt = JTree(model,ord,weights=1e-6)
     lnF = jt.msgForward()      # max-product junction tree
-    self.assertTrue( abs(lnF - -45.105018) < tol ) 
+    self.assertTrue( abs(lnF - -45.105018) < tol , "lnF {} != -45.105018".format(lnF)) 
     xhat = jt.argmax()         # and find the optimal configuration
     self.assertTrue( abs(model.logValue(xhat) - -45.105018) < tol ) 
 

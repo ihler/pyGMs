@@ -10,9 +10,17 @@ Version 0.0.1 (2015-09-28)
 import numpy as np;
 from sortedcontainers import SortedSet as sset;
 
+try:
+  from .varset_c import Var,VarSet
+except ImportError:
+  #print "Compiled version not loaded; importing python version"
+  from .varset_py import Var,VarSet
 
+
+
+"""
 class Var(object):
-  """A basic discrete random variable; a pair, (label,#states) """
+  " ""A basic discrete random variable; a pair, (label,#states) "" "
   label = []
   states = 0
   def __init__(self, label, states):
@@ -42,25 +50,28 @@ class Var(object):
     return self.label
 
 class VarSet(sset):
-  """Container for (sorted) set of variables; the arguments to a factor """
+  " ""Container for (sorted) set of variables; the arguments to a factor "" "
   # TODO: switch to np.array1D pair (ids, states)  (int/uint,uint)?
   #   using __get__ to return Var types
   #   use np.union1d, in1d, etc to manipulate
 
   def dims(self):
-    return tuple(d for d in (v.states for v in self)) if len(self) else (1,)
+    return tuple(v.states for v in self) if len(self) else (1,)
+    #return tuple(d for d in (v.states for v in self)) if len(self) else (1,)
   def nvar(self): # also size?
     return len(self)
   def nrStates(self):
-    s = 1
-    for d in (v.states for v in self):
-      s *= d
-    return s
+    return reduce( lambda s,v: s*v.states, self, 1);   # TODO: faster? slower?
+    #s = 1
+    #for d in (v.states for v in self):
+    #  s *= d
+    #return s
   def nrStatesDouble(self):
-    s = 1.0
-    for d in (v.states for v in self):
-      s *= d
-    return s
+    return reduce( lambda s,v: s*v.states, self, 1.0);
+    #s = 1.0
+    #for d in (v.states for v in self):
+    #  s *= d
+    #return s
   def __repr__(self):
     return "{"+','.join(map(str,self))+'}'
   def __str__(self):
@@ -81,7 +92,7 @@ class VarSet(sset):
 #     yeild vs.ind2sub(idx)    # not very efficient method...
 #     idx += 1
 
-
+"""
 
 class __VarSet(sset):
   """Container for (sorted) set of variables; the arguments to a factor """
@@ -125,6 +136,7 @@ class __VarSet(sset):
 
 
 orderMethod = 'f'   # TODO ??? backward?
+#orderMethod = 'C'   # TODO ??? backward?
 # Notes: column-major (order=F) puts last index sequentially ("big endian"): t[0 0 0], t[0 0 1], t[0 1 0] ...
 #        row major (order=C) puts 1st index sequentially ("little endian"): t[0 0 0], t[1 0 0], t[0 1 0], ...
 
@@ -134,7 +146,7 @@ class Factor(object):
   v = VarSet([])       # internal storage for variable set (VarSet)
   t = np.ndarray([])   # internal storage for table (numpy array)
 
-  def __init__(self,vars=None,vals=1.0):
+  def __init__(self,vars=VarSet(),vals=1.0):
     """Constructor for factor: f( [vars],[vals] ) creates factor over [vars] with table [vals] """
     # TODO: add user-specified order method for values (order=)
     # TODO: accept out-of-order vars list  (=> permute vals as req'd)
@@ -143,13 +155,16 @@ class Factor(object):
     except TypeError:                                   # if not iterable (e.g. single variable)
       self.v = VarSet()                                 #   try just adding it
       self.v.add(vars)
-    assert( self.v.nrStates() > 0)
+    #assert( self.v.nrStates() > 0)
+    #if self.v.nrStatesDouble() > 1e8: raise ValueError("Too big!");
 
-    self.t = np.ndarray(shape=self.v.dims(),dtype=float,order=orderMethod)
-    try:
+    try: #TODO try: if type(vals) is float: ?
+      #self.t = np.ndarray(shape=self.v.dims(),dtype=float,order=orderMethod)
+      self.t = np.empty(self.v.dims(), float, orderMethod);
+      #self.t.fill(vals);
       self.t[:] = vals                                  # try filling factor with "vals"
     except ValueError:                                  # if it's an incompatible shape,
-      self.t = np.array(vals,dtype=float).reshape(self.v.dims(),order=orderMethod) #   try again using reshape
+      self.t = np.reshape( np.array(vals,float), self.v.dims(), orderMethod) #   try again using reshape
 
 
   def __build(self,vs,ndarray):
@@ -164,7 +179,7 @@ class Factor(object):
     """Copy constructor"""
     f = Factor()
     f.v = self.v.copy()
-    f.t = self.t.copy() #order=orderMethod)
+    f.t = self.t.copy('K') #order=orderMethod)
     return f
 
 
@@ -176,7 +191,6 @@ class Factor(object):
     v = VarSet(vars)
     newOrder = map(lambda x:v.index(x), vars)
     return Factor(v, self.t.transpose(newOrder))
-    #return NotImplemented
 
   def __repr__(self):
     """Detailed representation: scope (varset) + table memory location"""
@@ -372,7 +386,6 @@ class Factor(object):
 
   def __isub__(self,that):
     """In-place subtraction, F1 -= F2.  Best if F2.vars <= F1.vars"""
-    #return self.__opExpand1(that,np.subtract, out=self)
     return self.__opExpand2(that,np.subtract, out=self)
 
   def __mul__(self,that):
@@ -385,7 +398,6 @@ class Factor(object):
 
   def __imul__(self,that):
     """In-place multiplication, F1 *= F2.  Best if F2.vars <= F1.vars"""
-    #return self.__opExpand1(that,np.multiply, out=self)
     return self.__opExpand2(that,np.multiply, out=self)
 
   def __div__(self,that):
@@ -403,7 +415,6 @@ class Factor(object):
 
   def __idiv__(self,that):
     """In-place divide, F1 /= F2.  Best if F2.vars <= F1.vars"""
-    #return self.__opExpand1(that,np.divide, out=self)
     return self.__opExpand2(that,np.divide, out=self)
 
   __itruediv__ = __idiv__
@@ -428,14 +439,12 @@ class Factor(object):
     tmp = (self ** power).sum(elim)
     tmp **= (1.0/power)
     return tmp
-    #return (self ** power).sum(elim)**(1.0/power)     # TODO: make more efficient?
 
   def lse(self, elim=None, out=None):
     """Eliminate via log-sum-exp on F, e.g., f(x_2) = log sum_{x_1} exp F(x_1,x_2) = F.lse(x[1])"""
     if (elim is None):
       elim = self.v
-    return self.__opReduce3(self.v & elim,np.logaddexp.reduce, out=out)
-    #return self.__opReduce1(self.v & elim,np.logaddexp, -np.inf)  # TODO: make more efficient!
+    return self.__opReduce3(self.v & elim, np.logaddexp.reduce, out=out)
 
   def lsePower(self, elim=None, power=1.0, out=None):
     """Eliminate via powered log-sum-exp, e.g., f(x_2) = 1/p log sum_{x_1} exp F(x_1,x_2)*p = F.lsePower(x[1],p)"""
@@ -445,7 +454,6 @@ class Factor(object):
     tmp = (self*power).lse(elim)
     tmp *= (1.0/power)
     return tmp
-    #return (self*power).lse(elim)*(1.0/power)      # TODO: make more efficient?
 
   def max(self, elim=None, out=None):
     """Eliminate via max on F, e.g., f(x_2) = max_{x_1} F(x_1,x_2) = F.max(x[1])"""
@@ -541,18 +549,21 @@ class Factor(object):
     cvars = [ v for v in self.v if v in evidence ]
     return Factor(self.v - cvars, self.t[ax])   # forces table copy in constructor
 
-  def slice2(self, cvars=None,ctuple=None):
-    """Create a clamped (or "sliced") factor using partial conditioning (list+list version)"""
-    return self.condition2(cvars,ctuple)
+  slice2 = condition2
+  #def slice2(self, cvars=None,ctuple=None):
+  #  """Create a clamped (or "sliced") factor using partial conditioning (list+list version)"""
+  #  return self.condition2(cvars,ctuple)
 
-  def slice(self, evidence={}):
-    """Create a clamped (or "sliced") factor using partial conditioning (dict version)"""
-    return condition(self,evidence)
+  slice = condition
+  #def slice(self, evidence={}):
+  #  """Create a clamped (or "sliced") factor using partial conditioning (dict version)"""
+  #  return condition(self,evidence)
 
   def entropy(self):
     """Compute the entropy of the factor (normalizes, assumes positive)"""
     Z = self.sum()
     assert (Z > 0), 'Non-normalizable factor (perhaps log factor?)' # also check for positivity?
+    #H = np.dot( np.ravel(self.t), np.log(self.t + 1e-100) )   # TODO: change? index ordering?
     H = 0.0
     for x in np.nditer(self.t, op_flags=['readonly']):
       p = x/Z
@@ -562,7 +573,7 @@ class Factor(object):
   def norm(self):
     """Compute any of several norm-like functions on F(x)"""
     # TODO: implement
-    return
+    raise NotImplementedError
 
 #useful things:
 # np.ndindex(shape) : iterate over tuples consistent with shape
@@ -612,19 +623,25 @@ class Factor(object):
 
   def __opExpand2(self,that,op, out=None):
     """Internal combination function; assumes "op" is a numpy build-in (using a ufunc)"""
+    if not isinstance(that,Factor): # if not a Factor, must be a scalar; use scalar version:
+      if out is None: out = self.copy()        # make a target if needed
+      op(self.t, that, out=out.t)              # and do the op
+      return out
+    # Non-scalar 2nd argument version:
     A = self
     B = that if isinstance(that,Factor) else Factor([],that)
     vall = A.v | B.v
-    dA = list(map(lambda x:x.states if  x in A.v else 1 ,vall))
-    dB = list(map(lambda x:x.states if  x in B.v else 1 ,vall))
+    dA,dB = vall.expand_dims(A.v, B.v);
+    #dA = tuple(map(lambda x:x.states if  x in A.v else 1 ,vall));
+    #dB = tuple(map(lambda x:x.states if  x in B.v else 1 ,vall));
     if ( (out is not None) and (out.v == vall) ):
-        f = out                  # if out can be written to directly, do so
+      f = out                  # if out can be written to directly, do so
     else: 
-        f = Factor(vall)         # otherwise, make storage for output function
+      f = Factor(vall)         # otherwise, make storage for output function
     op( A.t.reshape(dA,order='A') , B.t.reshape(dB,order='A'), out=f.t )   # TODO: order=A necessary?
     if (out is not None and f is not out):
-        out.__build(f.v,f.t)     # if out requested but not used, write f's table into out
-        return out
+      out.__build(f.v,f.t)     # if out requested but not used, write f's table into out
+      return out
     return f
 
   def __opReduce1(self,elim,op,init): # TODO: change to IP; caller initializes?
@@ -647,7 +664,7 @@ class Factor(object):
       if (out is None):
         out = Factor(VarSet(self.v - elim))
       else:
-        assert (out.v == VarSet(self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
+        assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
       ax = tuple(map(lambda x: self.v.index(x), elim))  #
       #t = np.apply_over_axes(op, self.t, ax)    # bad: lots of intermediate memory?
       #t = op(self.t, axis=ax, out=None)               # any better?  TODO
@@ -665,7 +682,7 @@ class Factor(object):
       if (out is None):
         out = Factor(VarSet(self.v - elim))
       else:
-        assert (out.v == VarSet(self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
+        assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
       ax = tuple(map(lambda x: self.v.index(x), elim))  #
       src = self.t
       while len(ax) > 1:
