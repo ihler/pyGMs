@@ -462,7 +462,8 @@ class PseudoTree(object):
     for Xi in model.X:
       for f in model.factorsWith(Xi):
         adj[Xi] |= f.vars
-    
+      adj[Xi] -= [Xi]   
+ 
     for i,x in enumerate(elimOrder):
       nbrs = adj[x];      # when we eliminate x,
       for y in nbrs:      #   we connect all its neighbors to each other
