@@ -201,6 +201,8 @@ class GraphModel(object):
 
   def condition2(self, vs, xs):
     """Condition / clamp the graphical model on the partial configuration vs=xs (may be lists)"""
+    self.condition( {v:x for v,x in zip(vs,xs)} );
+  """
     if len(vs)==0: return
     constant = 0.0
     for f in self.factorsWithAny(vs): 
@@ -215,10 +217,24 @@ class GraphModel(object):
       f = Factor([v],0.0)
       f[xs[i]] = constant        # assignment is nonzero; distribute constant value into these factors
       self.addFactors([f])
+  """
 
   def condition(self, evidence):
     """Condition / clamp the graphical model on a partial configuration (dict) {Xi:xi,Xj:xj...}"""
-    return self.condition2([self.X[k] for k,v in evidence.iteritems()], [v for k,v in evidence.iteritems()])
+    #return self.condition2([self.X[k] for k,v in evidence.iteritems()], [v for k,v in evidence.iteritems()])
+    if len(evidence)==0: return
+    for v,x in evidence.iteritems():
+      constant = 0.0
+      for f in self.factorsWith(v):
+        self.removeFactors([f])
+        fc = f.condition({v:x})  
+        if (fc.nvar == 0): constant += np.log(fc[0])  # if it's now a constant, just pull it out 
+        else: self.addFactors([fc])                   # otherwise add the factor back to the model
+      f = Factor([self.X[v]],0.0)   # add delta f'n factor for each variable
+      f[x] = np.exp(constant)        # assignment is nonzero; distribute constant value into these factors
+      self.addFactors([f])
+
+
      
   def eliminate(self, elimVars, elimOp):
     """Eliminate (remove) a set of variables; elimOp(F,v) should eliminate variable v from factor F."""
@@ -449,7 +465,7 @@ class PseudoTree(object):
      pt.depth     = depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain
      pt.size      = total # of operations (sum of clique sizes) for the elimination process
   """
-  def __init__(self,model,elimOrder,force_or=False):
+  def __init__(self,model,elimOrder,force_or=False,max_width=100):
     """Build the pseudotree. Set force_or=True to force an or-chain pseudotree."""
     self.order  = elimOrder;
     self.parent = [None]*len(elimOrder);
@@ -457,6 +473,8 @@ class PseudoTree(object):
     self.depth = 0;
     self.size  = 0.0;
     height = [0]*len(elimOrder);
+    priority = np.zeros((len(elimOrder),),dtype=int);
+    priority[elimOrder] = np.arange(len(elimOrder));
    
     adj = [ VarSet([Xi]) for Xi in model.X ]   # build MRF  (TODO: make function)
     for Xi in model.X:
@@ -465,17 +483,16 @@ class PseudoTree(object):
       adj[Xi] -= [Xi]   
  
     for i,x in enumerate(elimOrder):
-      nbrs = adj[x];      # when we eliminate x,
+      nbrs = adj[x].copy();      # when we eliminate x,
       for y in nbrs:      #   we connect all its neighbors to each other
         adj[y] |= nbrs;
         adj[y] -= [x,y];
       self.width  = max(self.width, len(nbrs));   # update width statistic
+      if self.width > max_width: return
       self.size  += nbrs.nrStatesDouble()         #   and total size statistic
       if not force_or:    # and-or tree: find earliest eliminated neighbor  (TODO: use min priority)
-        for j,y in enumerate(elimOrder[i+1:]):
-          if y in nbrs: 
-            self.parent[x] = y;
-            break;
+        if len(nbrs): self.parent[x] = elimOrder[ min(priority[nbrs]) ] 
+        #if self.parent[x] is not None: assert( priority[self.parent[x]] > priority[x] )
       else:               # force or-tree (chain) pseudotree
         if i != len(elimOrder)-1: self.parent[x] = elimOrder[i+1];
       if self.parent[x] is not None:

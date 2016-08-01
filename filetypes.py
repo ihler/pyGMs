@@ -47,7 +47,8 @@ def readFileByTokens(path, specials=[]):
   spliton = '([\s'+''.join(specials)+'])'
   with open(path, 'r') as fp:
     for line in fp:
-      tok = re.split(spliton,line)[:-1]
+      if line[-1]=='\n': line = line[:-1]
+      tok = re.split(spliton,line)
       for t in tok: 
         t = t.strip()
         if t != '':
@@ -351,7 +352,24 @@ def writeWCSP(filename, factors):
         fp.write(" {:d}\n".format(f[tup]))
 
  
-      
+
+
+def readOrder(filename):
+    """Read an elimination order from a file; format "[nvar] [v0] [v1] ... [vn]
+       (note: can also be used for MPE configurations, etc.) """
+    with open(filename,'r') as fp:
+        lines = fp.readlines();
+    text = lines[-1].strip('\n').split(' ');
+    nvar = int(text[0]);
+    vals = [int(text[i]) for i in range(1,nvar+1)];
+    if len(vals) != nvar: raise ValueError("Problem with file?");
+    return vals
+
+def writeOrder(filename,order):
+    """Write an elimination order (or other vector) to a file"""
+    with open(filename,'w') as fp:
+        fp.write("{} ".format(len(order)));
+        fp.write(" ".join(map(str,order)));
   
 
 
