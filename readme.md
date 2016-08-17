@@ -18,8 +18,6 @@ $ export PYTHONPATH=${PYTHONPATH}:/directory/containing/
 ```
 or in Python
 ```
-
-```
 import sys
 sys.path.append('/directory/containing/')
 ```
