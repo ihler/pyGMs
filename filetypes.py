@@ -62,7 +62,7 @@ def readUai(filename):
     vs = VarSet(cliques[c])
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
-    #factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
+    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
     #pi = list(map(lambda x:vs.index(x), cliques[c])) 
     #ipi = list(pi)                   # get permutation mapping: file's order to sorted order
     #for j in range(len(pi)):         #   (ipi = inverse permutation)
@@ -188,7 +188,7 @@ def readErgo(filename):
     vs = VarSet(cliques[c])
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
-    #factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
+    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
     #pi = list(map(lambda x:vs.index(x), cliques[c]))
     #ipi = list(pi)                   # get permutation mapping: file's order to sorted order
     #for j in range(len(pi)):         #   (ipi = inverse permutation)
