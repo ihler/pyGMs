@@ -56,6 +56,9 @@ class VarSet(sset):
     return np.ravel_multi_index(sub,self.dims())
   def __hash__(self):
     return hash(tuple(v.label for v in self))
+  @property
+  def labels(self):
+    return [v.label for v in self]
   def expand_dims(self, *iterables):
     return tuple( tuple(map(lambda x:x.states if x in that else 1, self)) for that in iterables);
      #dA = tuple(map(lambda x:x.states if  x in A.v else 1 ,vall));

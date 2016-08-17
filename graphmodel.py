@@ -12,7 +12,9 @@ import numpy as np
 from sortedcontainers import SortedSet;
 from sortedcontainers import SortedListWithKey;
 
-from .factor import *
+inf = float('inf')
+
+from pyGM.factor import *
 
 # Make a simple sorted set of factors, ordered by clique size, then lexicographical by scope
 def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
@@ -21,7 +23,20 @@ def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{:04d}.'.form
 #   fs[0] is a minimal factor (smallest # of variables) and fs[-1] is a maximal factor (largest # of variables)
 
 class GraphModel(object):
-  """A graphical model class"""
+  """A basic graphical model class; represents a collection of factors.
+
+  Example:
+  >>> flist = readUai('myfile.uai')  # read a list of factors from a UAI format file
+  >>> model = GraphModel(flist)      # makes a copy of the factors for manipulation
+
+  The model may be stored in an exponential, product of factors form:  F = \prod_r f_r(X_r)
+  or in a log-probability, sum of factors form:  F = \sum_r \theta_r(X_r)
+  
+  Various accessor functions enable finding factors that depend on one or more variables, variables that
+  share one or more factors (their Markov blanket), manipulations to the graph (such as eliminating one
+  or more variables), and visualization (through networkx).
+
+  """
 
   X            = []            # variables model defined over
   factors      = factorSet()   # collection of factors that make up the model, sorted by scope size, lex
@@ -30,24 +45,49 @@ class GraphModel(object):
   #TODO: useful stuff for algorithm objects interacting with the graph
   lock         = False         # are factors "locked", or are reparameterization changes OK?
   sig          = 0;            # "signature" of factor cliques; changes if model structure (cliques) changes
-  
+ 
+  isLog = False                # flag: additive (log probability) model vs multiplicative (probability) model 
+
 
   def __repr__(self):
     # TODO: finish
     return "Graphical model: {} vars, {} factors".format(self.nvar,self.nfactors)
 
-  def __init__(self, factorList=None, copy=True):
-    """Create a graphical model object from a factor list.  Maintains local copies of the factors."""
+  def __init__(self, factorList=None, copy=True, isLog=False):   # TODO: , log=False)
+    """Create a graphical model object from a factor list.  Maintains local copies of the factors.
+
+    Args:
+       factorList (list): A list of factors defining the graphical model
+       copy (bool): Whether the model should make its own internal copy of all factors; default True
+       isLog (bool): Whether the factors are interpreted as log-probability factors; default False
+    """
     self.X = []
     self.factors = factorSet()
     self.factorsByVar = []
     self.lock = False
     self.sig = 0
+    self.isLog = isLog
     if not (factorList is None): self.addFactors(factorList, copy=copy)
-    
+  
+  def toLog(self):
+    """Convert internal factors to log form (if not already).  May use 'isLog' to check."""
+    if not self.isLog:
+      for f in self.factors: f.logIP()
+      self.isLog = True
+
+  def toExp(self):
+    """Convert internal factors to exp form (product of probabilities) if not.  May use 'isLog' to check."""
+    if self.isLog:
+      for f in self.factors: f.expIP()
+      self.isLog = False
+ 
+  def copy(self):
+    """Return a (deep) copy of the graphical model"""
+    import copy as pcopy
+    return pcopy.deepcopy(self)
 
   def addFactors(self,flist,copy=True):
-    """Add a list of factors to the model; factors are copied locally unless copy=False explicitly used"""
+    """Add a list of factors to the model; factors are copied locally unless copy = False"""
     import copy as pcopy
     if (copy): flist = pcopy.deepcopy(flist)  # create new factor copies that this model "owns"
     self.factors.update(flist);   # add factor to set of all factors, and to by-variable indexing
@@ -63,7 +103,10 @@ class GraphModel(object):
     self.sig = np.random.rand()     # TODO: check if structure is / can be preserved?
 
   def removeFactors(self,flist):
-    """Remove factors from the model; e.g. removeFactors(factorsWith([0])) removes all factors involving x0"""
+    """Remove a list of factors from the model
+    
+    >>> removeFactors(factorsWith([0]))    # remove all factors involving X0
+    """
     self.factors.difference_update(flist)
     for f in flist:
       for v in f.vars:
@@ -75,7 +118,8 @@ class GraphModel(object):
     for f in self.factors:
       fs = self.factorsWithAll(f.vars)
       if (f.nvar > 1) & (fs[-1] != f):
-        fs[-1] *= f
+        if self.isLog: fs[-1] += f
+        else:          fs[-1] *= f
         self.removeFactors([f])
         
   def makeMinimal(self):
@@ -84,30 +128,30 @@ class GraphModel(object):
       fs = self.factorsWithAll(f.vars)
       largest = fs[-1]
       if (fs[-1] != f):
-        largest *= f
-        #fs[-1] *= f
+        if self.isLog: largest += f
+        else:          largest *= f
         self.removeFactors([f])
 
 
   def factorsWith(self,v):
-    """gm.factorsWith(v) : get list of factors that include variable v"""
+    """Get the list of all factors that include variable v"""
     return self.factorsByVar[v].copy()
 
   def factorsWithAny(self,vs):
-    """gm.factorsWithAny([vs]) : get list of factors that include any variables in list vs"""
+    """Get the list of all factors that include any variables in the list vs"""
     flist = factorSet()
     for v in vs: flist.update( self.factorsByVar[v] )
     return flist
 
   def factorsWithAll(self,vs):
-    """gm.factorsWithAll([vs]) : get list of factors that include all variables in list vs"""
+    """Get the list of all factors that include all variables in the list vs"""
     if (len(vs)==0): return self.factors.copy()
     flist = self.factorsByVar[vs[0]].copy()
     for v in vs: flist.intersection_update(self.factorsByVar[v])
     return flist
   
   def markovBlanket(self,v):
-    """Get the Markov blanket of variable v (all vars involved in a factor with v)"""
+    """Get the Markov blanket of variable v (all variables involved in a factor with v)"""
     vs = VarSet()
     for f in self.factorsByVar[v]: vs |= f.vars
     vs -= [v]
@@ -115,11 +159,24 @@ class GraphModel(object):
  
   def value(self,x):
     """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x"""
-    return np.product( [ f.valueMap(x) for f in self.factors ] )
+    if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in self.factors ] ) )
+    else:          return np.product( [ f.valueMap(x) for f in self.factors ] )
 
   def logValue(self,x): 
     """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x"""
-    return sum( [ np.log(f.valueMap(x)) for f in self.factors ] )
+    if self.isLog: return sum( [ f.valueMap(x) for f in self.factors ] ) 
+    else:          return sum( [ np.log(f.valueMap(x)) for f in self.factors ] )
+
+  # TODO: combine with value/logValue?  
+  def valueMB(self,x,xeval):
+    """Evaluate F(x) at config x including *only* factors in the Markov blanket of set/list xeval """
+    if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in self.factorsWithAny(xeval) ] ) )
+    else:          return np.product( [ f.valueMap(x) for f in self.factorsWithAny(xeval) ] )
+
+  def logValueMB(self,x,xeval):    
+    """Evaluate log F(x) at config x including *only* factors in the Markov blanket of set/list xeval """
+    if self.isLog: return sum( [ f.valueMap(x) for f in self.factorsWithAny(xeval) ] ) 
+    else:          return sum( [ np.log(f.valueMap(x)) for f in self.factorsWithAny(xeval) ] )
 
 
   def isBinary(self):   # Check whether the model is binary (all variables binary)
@@ -127,64 +184,42 @@ class GraphModel(object):
     return all( [x.states <= 2 for x in self.X] )
 
   def isPairwise(self): # Check whether the model is pairwise (all factors pairwise)
-    """Check whether the graphical model is pairwise (max scope size = 2)"""
+    """Check whether the graphical model is pairwise (has maximum scope size 2)"""
     return all( [len(f.vars)<= 2 for f in self.factors] )
 
   def isCSP(self): 
     """Check whether the graphical model is a valid CSP (all zeros or ones)"""
     isTableCSP = lambda t : all( [ ((v==0.0) | (v==1.0)) for v in np.nditer(t) ] )
-    return all( [isTableCSP(f.table) for f in self.factors] )
+    return all( [isTableCSP(f.table) for f in self.factors] )   # TODO: product semantics
 
-  def isBN(self, tol=1e-6):  # Check whether the model is a valid Bayes Net (with topo order "order"?)
-    """check whether the graphical model is a valid Bayes net (one CPT per variable) """
-    if True: #order is None:
-      temp = GraphModel(self.factors, copy=False)  # slow? unnecessary?
-      topo_order = [-1]*self.nvar
-      pri = [-1]*self.nvar
-      for i in range(self.nvar):
-        if temp.factors[0].nvar != 1: return False
-        X = temp.factors[0].vars[0]
-        topo_order[i] = X
-        pri[X] = i
-        withX = temp.factorsWith(topo_order[i])
-        temp.removeFactors(withX)
-        temp.addFactors( [f.condition2([X],[0]) for f in withX if f.nvar > 1] )
-    #else:
-    #  pri = [-1]*len(order)
-    #  for i,x in enumerate(order): pri[x]=i
+  def isBN(self, tol=1e-6):  # Check whether the model is a valid Bayes Net
+    """Check whether the graphical model is a valid Bayes net (one CPT per variable) """
+    topo_order = bnOrder(self)                              # TODO: allow user-provided order?
+    if topo_order is None: return False
+    # Now check to make sure each factor is a CPT for its last variable
+    pri = np.zeros((len(topo_order),))-1
+    pri[topo_order] = np.arange(len(topo_order))
+    found  = [ 1 if x.states <= 1 else 0 for x in self.X ]  # track which variables have CPTs
     for f in self.factors:
-      X = f.vars[ np.argmax([pri[x] for x in f.vars]) ]
-      tmp = f.sum([X])
-      tmp -= 1.0
+      X = f.vars[ np.argmax([pri[x] for x in f.vars]) ]     # which is the last variable in this factor?
+      found[X] = 1;
+      tmp = f.sum([X]) - 1.0                         # check that each row sums to 1.0; TODO: product semantics
       try:
         tmp = tmp.absIP().max()
       except:
         tmp = abs(tmp)
-      if tmp > tol: return False
+      if tmp > tol: return False                     # fail if not a CPT for X
+    if np.prod(found)==0: return False               # fail if missing some variable's CPT
     return True
- 
     
-    
-    pass
-  # find factors with only one variable
-  # add those to topo order as roots
-  # remove from other factors & repeat
-  # 
-  # TODO
-  # convert order to priority listing; found = [0 for x in X]
-  # run through factors, computing highest priority in each
-  #   find xlast = x : pri(x) == max(pri(xalpha))
-  #   check that f.sum(xlast) == 1 ; if not fail, if so set found(xlast)
-  # set found(x) = 1 for x : x.states < 2
-  # check that found == 1
 
   @property
   def vars(self):
-    """List of variables in the graphical model"""
+    """List of variables in the graphical model; equals model.X"""
     return self.X
 
   def var(self,i):   # TODO: change to property to access (read only?) X?
-    """Return a variable object (with # states) for id 'i'"""
+    """Return a variable object (with # states) for id 'i'; equals model.X[i]"""
     return self.X[i]
 
   @property
@@ -199,56 +234,52 @@ class GraphModel(object):
 
 
 
-  def condition2(self, vs, xs):
-    """Condition / clamp the graphical model on the partial configuration vs=xs (may be lists)"""
-    self.condition( {v:x for v,x in zip(vs,xs)} );
-  """
-    if len(vs)==0: return
-    constant = 0.0
-    for f in self.factorsWithAny(vs): 
-      self.removeFactors([f])
-      fc = f.condition2(vs,xs)   # TODO: want to keep "f" reference?  f.__build?  (still  remove/add for sort)
-      if (fc.nvar == 0): constant += np.log(fc[0])  # if it's now a constant, just pull it out 
-      else: self.addFactors([fc])                   # otherwise add the factor back to the model
-    # TODO: merge any subsumed factors?  (no; use minimal/canonical for that?)
-    # Simpler: track modified factors; get factorsWithAll(f.vars).largest() and merge into that
-    constant = np.exp(constant / len(vs))
-    for i,v in enumerate(vs):    # add delta f'n factor for each variable
-      f = Factor([v],0.0)
-      f[xs[i]] = constant        # assignment is nonzero; distribute constant value into these factors
-      self.addFactors([f])
-  """
-
   def condition(self, evidence):
-    """Condition / clamp the graphical model on a partial configuration (dict) {Xi:xi,Xj:xj...}"""
-    #return self.condition2([self.X[k] for k,v in evidence.iteritems()], [v for k,v in evidence.iteritems()])
+    """Condition (clamp) the graphical model on a partial configuration (dict) {Xi:xi, Xj:xj, ...}"""
+    # TODO: optionally, ensure re-added factor is maximal, or modify an existing one (fWithAll(vs)[-1]?)
     if len(evidence)==0: return
     for v,x in evidence.iteritems():
       constant = 0.0
       for f in self.factorsWith(v):
         self.removeFactors([f])
-        fc = f.condition({v:x})  
-        if (fc.nvar == 0): constant += np.log(fc[0])  # if it's now a constant, just pull it out 
-        else: self.addFactors([fc])                   # otherwise add the factor back to the model
-      f = Factor([self.X[v]],0.0)   # add delta f'n factor for each variable
-      f[x] = np.exp(constant)        # assignment is nonzero; distribute constant value into these factors
-      self.addFactors([f])
+        fc = f.condition({v:x})                       
+        if (fc.nvar == 0):
+          if self.isLog: constant += fc[0]            # if it's now a constant, just pull it out 
+          else:          constant += np.log(fc[0])
+        else: 
+          self.addFactors([fc],copy=False)            # otherwise add the factor back to the model
+      # add delta f'n factor for each variable, and distribute any constant value into this factor
+      if self.isLog: f = Factor([self.X[v]],-inf); f[x] = constant
+      else:          f = Factor([self.X[v]],0.0); f[x] = np.exp(constant)
+      self.addFactors([f],copy=False)
+
+  def condition2(self, vs, xs):
+    """Condition (clamp) the graphical model on the partial configuration vs=xs (may be lists or tuples)"""
+    self.condition( {v:x for v,x in zip(vs,xs)} );
 
 
      
   def eliminate(self, elimVars, elimOp):
-    """Eliminate (remove) a set of variables; elimOp(F,v) should eliminate variable v from factor F."""
+    """Eliminate (remove) a set of variables from the model
+
+    Args:
+      elimVars (iterable): list of variables to eliminate (in order of elimination)
+      elimOp (str or lambda-fn): function to eliminate variable v from factor F; 'max', 'min', 'sum', 'lse',
+          or a user-defined custom function, e.g., 'lambda F,v: ...'
+    """
     if isinstance(elimVars,Var)|isinstance(elimVars,int): elimVars = [elimVars]   # check for single-var case
     if type(elimOp) is str:    # Basic elimination operators can be specified by a string
-        if   elimOp.lower() == "sum": elimOp = lambda F,X: F.sum(X)
-        elif elimOp.lower() == "lse": elimOp = lambda F,X: F.lse(X)
-        elif elimOp.lower() == "max": elimOp = lambda F,X: F.max(X)
-        elif elimOp.lower() == "min": elimOp = lambda F,X: F.min(X)
+        elimOp = elimOp.lower()
+        if   elimOp == "sum": elimOp = lambda F,X: F.sum(X)
+        elif elimOp == "lse": elimOp = lambda F,X: F.lse(X)
+        elif elimOp == "max": elimOp = lambda F,X: F.max(X)
+        elif elimOp == "min": elimOp = lambda F,X: F.min(X)
         else: raise ValueError("Unrecognized elimination type {}; 'sum','lse','max','min' or custom function".format(elimOp));
     for v in elimVars:
-      F = Factor([],1.0)
+      F = Factor([],0.0 if self.isLog else 1.0)             
       for f in self.factorsWith(v): 
-        F *= f
+        if self.isLog: F += f
+        else:          F *= f
         self.removeFactors([f])
       F = elimOp(F, [v])
       if isinstance(F, Factor): self.addFactors([F],False)  # add factor F by reference
@@ -258,16 +289,46 @@ class GraphModel(object):
 
   def joint(self):
     """Compute brute-force joint function F(x) = \prod_r f_r(x_r) as a (large) factor"""
-    F = Factor([],1.0)
-    for f in self.factors: F *= f
+    F = Factor([],0.0 if self.isLog else 1.0)
+    for f in self.factors: 
+      if self.isLog: F += f
+      else:          F *= f   
     return F
 
-  # TODO: add function(s) to split graph into any disconnected components?  detect disconnected components?
-
+  def connectedComponents(self):
+    """Find the connected components of the model's Markov graph.  Returns a list of sets of variables."""
+    components = []
+    X = set(self.X)
+    while X:
+        Xi = X.pop()
+        group = {Xi}
+        queue = [Xi]
+        while queue:
+            n = queue.pop()
+            nbrs = self.markovBlanket(n)
+            nbrs.difference_update(group)
+            X.difference_update(nbrs)
+            group.update(nbrs)
+            queue.extend(nbrs)
+        components.append(group)
+    return components
+        
+    # Note: to split graph into connected components, use e.g.
+    # >>> [GraphModel(model.factorsWithAny(vs)) for vs in model.connectedComponents()]
+    # (although each model may have the full set of variables, most with 0 or 1 state...)  
+    # NOTE: don't forget about any scalar factors...
+    
+    
+    
 
 
   def nxMarkovGraph(self):
-    """Get networkx Graph object of the Markov graph of the model"""
+    """Get networkx Graph object of the Markov graph of the model
+
+    Example:
+    >>> G = nxMarkovGraph(model)
+    >>> nx.draw(G)
+    """
     import networkx as nx
     G = nx.Graph()
     G.add_nodes_from( [v.label for v in self.X] )  # TODO: only non-empty / non-trivial variables?
@@ -287,7 +348,14 @@ class GraphModel(object):
     """
 
   def drawMarkovGraph(self,**kwargs):
-    """Draw a Markov random field using networkx function calls"""
+    """Draw a Markov random field using networkx function calls
+
+    Args:
+      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
+
+    Example:
+    >>> model.drawMarkovGraph( labels={0:'0', ... } )    # keyword args passed to networkx.draw()
+    """
     # TODO: fix defaults; specify shape, size etc. consistent with FG version
     import networkx as nx
     G = nx.Graph()
@@ -299,35 +367,42 @@ class GraphModel(object):
     kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in G.nodes()})
     kwargs['labels'] = kwargs.get('var_labels',{})
     nx.draw(G,**kwargs)
+    return G
 
 
 
   def drawFactorGraph(self,var_color='w',factor_color=(.2,.2,.8),**kwargs):
-    """Draw a factorgraph using networkx function calls"""
-    # TODO: specify var/factor shape,size, etc.
+    """Draw a factorgraph using networkx function calls
+
+    Args:
+      var_color (str, tuple): networkx color descriptor for drawing variable nodes
+      factor_color (str, tuple): networkx color for drawing factor nodes
+      var_labels (dict): variable id to label string for variable nodes
+      factor_labels (dict): factor id to label string for factor nodes
+      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
+
+    Example:
+    >>> model.drawFactorGraph( var_labels={0:'0', ... } )    # keyword args passed to networkx.draw()
+    """
+    # TODO: specify var/factor shape,size, position, etc.; return G? silent mode?
     import networkx as nx
     G = nx.Graph()
-    vNodes = [v.label for v in self.X]   # TODO: only non-empty / non-trivial variables?
-    fNodes = [-i-1 for i in range(len(self.factors))]
+    vNodes = [v.label for v in self.X if v.states > 1]   # list only non-trivial variables
+    fNodes = [-i-1 for i in range(len(self.factors))]    # use negative IDs for factors
     G.add_nodes_from( vNodes )
     G.add_nodes_from( fNodes )
     for i,f in enumerate(self.factors):
       for v1 in f.vars:
         G.add_edge(v1.label,-i-1)
-        #G.add_edge(v1.label,-self.factors.index(f)-1)
+   
     pos = nx.spring_layout(G)   # so we can use same positions multiple times...
-    kwargs['var_labels']  =kwargs.get('var_labels',{n:n for n in vNodes})
-    #kwargs['var_color']   =kwargs.get('var_color','w')
-    #kwargs['factor_color']=kwargs.get('factor_color',(.2,.2,.8))
-    kwargs['labels']=kwargs.get('var_labels',{})
+    kwargs['var_labels']  = kwargs.get('var_labels',{n:n for n in vNodes})
+    kwargs['labels'] = kwargs.get('var_labels',{})
     nx.draw_networkx(G,pos, nodelist=vNodes,node_color=var_color,**kwargs)
-    kwargs['labels']=kwargs.get('factor_labels',{})
+    kwargs['labels'] = kwargs.get('factor_labels',{})    # TODO: need to transform?
     nx.draw_networkx_nodes(G,pos, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
     nx.draw_networkx_edges(G,pos,**kwargs)
-    #if 'labels' in kwargs:
-    #  nx.draw_networkx_labels(G,pos=pos,**kwargs)
-    #else:
-    #  nx.draw_networkx_labels(G,pos=pos,labels={n:n for n in vNodes},**kwargs)
+    return G
 
 
 #  def nxFactorGraph(self):
@@ -365,15 +440,6 @@ class GraphModel(object):
 
 
 
-#  def condition(self, conditionVars, conditionVals ):
-#    condFactors = set.union(*[self.adjacency[xi] for xi in conditionVars])
-#    for f in condFactors:
-#      self.removeFactor(f)
-#      self.addFactor( f.condition( conditionVars, conditionVals ) )
-#    for v in conditionVars: self.X[v] = Var(v.label,1)   # each xi in cVars has only one possible state now
-
-
-
 
 
 #### Methods needed
@@ -390,22 +456,82 @@ class GraphModel(object):
 #
 #
 
-def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=float('inf'), priority=None, target=None):
-  '''Find an elimination order for a graphical model
-  ord,score = eliminationOrder(gm, method, nExtra, cutoff, priority, target):
-    ord: the elimination order (a list of variables)
-    score:  the total size of the resulting junction tree (sum of the cliques' sizes)
-    gm:     graphical model object
-    method: {'minfill','wtminfill','minwidth','wtminwidth','random'}
-    nExtra: randomly select eliminated variable from among the best plus nExtra; this adds
-            randomness to the order selection process.  0 => randomly from best; -1 => no randomness (default)
-    cutoff: quit early if "score" exceeds a user-supplied cutoff value (returning "target,cutoff")
-    target:  if identified order is better than cutoff, write directly into passed "target" list
-            Note: this means that you can easily search for better orderings by, e.g., repeated calls:
-               ord,score = eliminationOrder(gm,'minfill', nExtra=2, cutoff=score, target=ord) 
-    priority: optional list of variable priorities; lowest priority variables are eliminated first.
-            Useful for mixed elimination models, such as marginal MAP inference tasks
-  '''
+def bnOrder(bn):
+    """Return a topological order for the variables (roots to leaves), assuming 'bn' is a Bayes net
+
+    Returns:
+        list: variable IDs in a topological order from roots to leaves
+    """
+    temp = GraphModel(bn.factors, copy=False)  # slow? unnecessary?
+    topo_order = [-1]*bn.nvar
+    pri = [-1]*bn.nvar
+    for i in range(bn.nvar):
+        if temp.factors[0].nvar != 1: return None    # if there are no root variables, not a BN
+        X = temp.factors[0].vars[0]                  # otherwise, add root to the topological order
+        topo_order[i] = X.label
+        pri[X] = i
+        withX = temp.factorsWith(topo_order[i])      # remove it from its childrens' CPTs
+        temp.removeFactors(withX)                    #  to look for the next variable in the order
+        temp.addFactors( [f.condition2([X],[0]) for f in withX if f.nvar > 1] )
+    return topo_order
+
+
+def bnSample(model, order, evidence={}):
+  """Draw a sample from a Bayes net with given topological order and evidence E={ Xi: k ... }
+
+  Args:
+    model (GraphModel): A Bayesian network or other graphical model
+    order (list): A topological ordering of the variables, e.g., from ``bnOrder(model)``
+
+  Returns:
+     float : lnP, the log-probability of the sampled configuration xs 
+     list  : xs, the sampled configuration (including evidence)
+
+  Notes: lnP, the log-probability, does not include any evidence probabilities.  If `model` is not a
+     Bayes net, the process and lnP will still correspond to some valid distribution over X given E.
+  """
+  lnP, cfg = 0.0, evidence.copy()
+  pri = np.zeros((len(order),))-1
+  pri[order] = np.arange(len(order))
+  for i in order:
+    if i in evidence: continue
+    F = model.factorsWith(i)
+    fid = np.argmin( [ np.max(pri[f.vars.labels]) for f in F ] )  # find factor with X and earliest neighbors
+    Pi = F[fid].condition(cfg)
+    if model.isLog: Pi.expIP()    # if storing log-factors, exponentiate...
+    Pi /= Pi.sum()
+    Pi = Pi.marginal([i])     # likely not necessary, but to be safe for non BNs
+    cfg[i] = Pi.sample()[0]
+    lnP += np.log( Pi[cfg[i]] )
+  return lnP, tuple(cfg.get(i,0) for i in model.X)    # TODO: map versus tuple?
+
+# One-line likelihood weighting estimator:
+# np.mean( [ np.exp(model.logValue(xs)-lnP) for s in xrange(1000) for lnP,xs in [gm.bnSample(model,order,evid)] ] )
+#
+#
+
+
+
+def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
+  """Find an elimination order for a graphical model
+
+  Args:
+    gm (GraphModel): A graphical model object
+    method (str): Heuristic method; one of {'minfill','wtminfill','minwidth','wtminwidth','random'}
+    nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds
+        randomness to the order selection process.  0 => randomly from best; -1 => no randomness (default)
+    cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)
+    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
+    priority (list, optional): Optional list of variable priorities; lowest priority variables are 
+        eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.
+
+  Returns:
+    list: The identified elimination order
+    float: The "score" of this ordering
+
+  Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:
+  >>> ord, score = eliminationOrder(model, 'minfill', nExtra=2, cutoff=score, target=ord) 
+  """
   import bisect
   orderMethod = 'minfill' if orderMethod is None else orderMethod.lower()
   priority = [1 for x in gm.X] if priority is None else priority
@@ -438,7 +564,7 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=float('inf'), prior
       pick = np.random.randint(pick)
       Pi,Si,Xi = scores[pick]
     del scores[pick]
-    _order[idx] = Xi        # write into order[idx] = Xi
+    _order[idx] = Xi.label        # write into order[idx] = Xi
     totalSize += adj[Xi].nrStatesDouble()
     if totalSize > cutoff: return target,cutoff  # if worse than cutoff, quit with no changes to "target"
     fix = VarSet()
@@ -460,12 +586,14 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=float('inf'), prior
 
 class PseudoTree(object):
   """Represent the pseudo-tree of a graphical model, given elimination ordering
-     pt.parent[x] = earliest parent of x in the pseudotree
-     pt.width     = width (largest clique) in the tree
-     pt.depth     = depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain
-     pt.size      = total # of operations (sum of clique sizes) for the elimination process
+
+  Attributes:
+     pt.parent (list): pt.parent[x] gives the earliest parent of x in the pseudotree
+     pt.width (int): width (largest clique) in the tree
+     pt.depth (int): depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain
+     pt.size  (float): total # of operations (sum of clique sizes) for the elimination process
   """
-  def __init__(self,model,elimOrder,force_or=False,max_width=100):
+  def __init__(self,model,elimOrder,force_or=False,max_width=None):
     """Build the pseudotree. Set force_or=True to force an or-chain pseudotree."""
     self.order  = elimOrder;
     self.parent = [None]*len(elimOrder);
@@ -475,12 +603,9 @@ class PseudoTree(object):
     height = [0]*len(elimOrder);
     priority = np.zeros((len(elimOrder),),dtype=int);
     priority[elimOrder] = np.arange(len(elimOrder));
-   
-    adj = [ VarSet([Xi]) for Xi in model.X ]   # build MRF  (TODO: make function)
-    for Xi in model.X:
-      for f in model.factorsWith(Xi):
-        adj[Xi] |= f.vars
-      adj[Xi] -= [Xi]   
+    if max_width is None: max_width = len(elimOrder);
+
+    adj = [ model.markovBlanket(Xi) for Xi in model.X ]  # build MRF
  
     for i,x in enumerate(elimOrder):
       nbrs = adj[x].copy();      # when we eliminate x,
@@ -488,10 +613,10 @@ class PseudoTree(object):
         adj[y] |= nbrs;
         adj[y] -= [x,y];
       self.width  = max(self.width, len(nbrs));   # update width statistic
-      if self.width > max_width: return
+      if self.width > max_width: self.depth,self.width = inf,inf; return  # give up?
       self.size  += nbrs.nrStatesDouble()         #   and total size statistic
-      if not force_or:    # and-or tree: find earliest eliminated neighbor  (TODO: use min priority)
-        if len(nbrs): self.parent[x] = elimOrder[ min(priority[nbrs]) ] 
+      if not force_or:    # and-or tree: find earliest eliminated neighbor 
+        if len(nbrs): self.parent[x] = elimOrder[ min(priority[nbrs.labels]) ] 
         #if self.parent[x] is not None: assert( priority[self.parent[x]] > priority[x] )
       else:               # force or-tree (chain) pseudotree
         if i != len(elimOrder)-1: self.parent[x] = elimOrder[i+1];
@@ -509,22 +634,22 @@ class PseudoTree(object):
 #  
 
 
-def bnOrder(factors):
-  """Return a topological order for a Bayes net defined by an (ordered) factor list 
-     factors[i] should be the conditional probability p(Xi | X_{pa_i}) 
-  """
-  # TODO: inefficient
-  todo = set(fg_alarm.X)
-  done = set()
-  order = []
-  for i in range(len(f_alarm)):
-    for j in todo:
-      if len(f_alarm[j].vars - done - [fg_alarm.X[j]]) == 0:
-        order.append(j.label)
-        done.add(j)
-        todo.remove(j)
-        break
-  return order
+#def bnOrder(model):
+#  """Return a topological order for a Bayes net defined by an (ordered) factor list 
+#     factors[i] should be the conditional probability p(Xi | X_{pa_i}) 
+#  """
+#  todo = set(model.X)
+#  check = set(model.X)
+#  done = set()
+#  order = []
+#  for i in range(len(f_alarm)):
+#    for j in todo:
+#      if len(f_alarm[j].vars - done - [fg_alarm.X[j]]) == 0:
+#        order.append(j.label)
+#        done.add(j)
+#        todo.remove(j)
+#        break
+#  return order
 
 
 # TODO: function to return bayes ordering of factors from the model given topo ordering of X?
@@ -572,8 +697,10 @@ def factorOrder(factors, varOrder):
 
 #def forwardSample(model, varOrder, factorOrder=None):
 def sampleSequential(model, varOrder, factorOrder=None):
-  """sampleSequential: draw a configuration sequentially from the model factors.
-       Returns xs,logQ  (tuple): the sampled config and its log-probability under the sampling distribution
+  """Draw a configuration X sequentially from the model factors.
+ 
+  Returns xs,logQ  (tuple): the sampled config and its log-probability under the sampling distribution
+  TODO: backwards from convention...
   """
   if factorOrder is None: factorOrder = []
   if len(factorOrder)==0:
@@ -596,13 +723,13 @@ def sampleSequential(model, varOrder, factorOrder=None):
     s[ xi ], = Pxi.sample(Z=Zi)  # draw sample for i'th variable
     lnP += np.log( Pxi[s[xi]] / Zi )
   s_list = [ s[i] for i in range(len(s)) ]
-  return s_list, lnP
+  return s_list, lnP   # TODO: backwards?
    
 
 
-def bnSample(model, order):
+def __bnSample(model, order):
   """Draw a sample from a Bayes net model with given topo order """
-  # TODO: fix
+  # TODO: fix; return  lnPx, x
   x = [-1 for Xi in order]   # assumes 0..N ids
   # TODO: isBN, this need topo ordering of factors
   for i in order:
@@ -621,8 +748,12 @@ def bnSample(model, order):
 # "factors" are the model factors to conver to the vector representation
 # "theta" is the resulting log-vector
 
+# TODO: update to accept either a factor list or a graphical model
+# TODO: update to check for isLog flag
+
 def vectorize(factors, features, default=0.0):
   """Return a vectorization of the model with "factors", under the specified set of base features"""
+  # TODO: better documentation
   model = GraphModel(features, copy=False)  # create model with references to feature factors
   idx = {};
   t = 0;
@@ -635,15 +766,15 @@ def vectorize(factors, features, default=0.0):
     theta[idx[u]] += f.log().table.ravel(order=orderMethod);   # and add the factor to it
   return theta
 
-def devectorize(theta, features, default=0.0):
+def devectorize(theta, features, default=0.0, tolerance=0.0):
   """Return a vectorization of the model with "factors", under the specified set of base features"""
   t = 0;
   factors = []
   for u in features:
     fnext = Factor(u.vars, theta[t:t+u.numel()]);
     t += u.numel();
-    if (fnext-default).abs().sum() > 0.0:
-      factors.append( fnext.expIP() );
+    if (fnext-default).abs().sum() > tolerance:   # if any entries are different from the default,
+      factors.append( fnext.expIP() );            #   add them as factors  (exp?)
   return factors
 
 ################################################################################################

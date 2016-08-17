@@ -14,35 +14,11 @@ Version 0.0.1 (2015-09-28)
 
 import numpy as np;
 from sortedcontainers import SortedSet as sset;
-from .factor import *
-
-
-#def OLDreadFileByTokens(path, specials=[]):
-#  """
-#  Helper function for file IO
-#  Iterator to read from file byte by byte, splitting into tokens at spaces or elements of "specials"
-#  """
-#  #TODO: add support for comment / ignore-content format?  (/* comment */, # comment, etc)
-#  with open(path, 'r') as fp:
-#    buf = []
-#    while True:
-#      ch = fp.read(1)
-#      if ch == '':
-#        break
-#      elif ch in specials:
-#        if buf:
-#          yield ''.join(buf)
-#        buf = []
-#        yield ch
-#      elif ch.isspace():
-#        if buf:
-#          yield ''.join(buf)
-#          buf = []
-#      else:
-#        buf.append(ch)
+from pyGM.factor import *
 
 
 def readFileByTokens(path, specials=[]):
+  """Helper function for parsing pyGM file formats"""
   import re
   spliton = '([\s'+''.join(specials)+'])'
   with open(path, 'r') as fp:
@@ -55,44 +31,12 @@ def readFileByTokens(path, specials=[]):
           yield t
 
 
-#class FileTokenizer:
-#  """Helper function for file IO"""
-#  def __init__(self, path):
-#    self.name = path
-#    self.fh = open(path)
-#    self.eof = False
-#  def __enter__(self):
-#    return self
-#  def __exit__(self,type,value,traceback):
-#    self.close()
-#  def close(self):
-#    self.fh.close()
-#    self.eof = True
-#  def next(self):
-#    buf = []
-#    while not self.eof:
-#      ch = self.fh.read(1)
-#      if (ch == ''):
-#        self.eof=True
-#        break
-#      if (ch.isspace() and buf):
-#        break
-#      else:
-#        buf.append(ch)
-#    return ''.join(buf)
-#
-            
-"""
-with FileTokenizer('tst.txt') as tok:
-  while not tok.eof:
-    print tok.next()
-"""
-
-
 
 def readUai(filename):
   """Read in a collection (list) of factors specified in UAI 2010 format
-  factor_list = readUai10( 'path/filename.uai' )
+
+  Example:
+  >>> factor_list = readUai10( 'path/filename.uai' )
   """
   dims = []           # store dimension (# of states) of the variables
   i = 0               # (local index over variables)
@@ -118,40 +62,40 @@ def readUai(filename):
     vs = VarSet(cliques[c])
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
-    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
-    pi = list(map(lambda x:vs.index(x), cliques[c])) 
-    ipi = list(pi)                   # get permutation mapping: file's order to sorted order
-    for j in range(len(pi)):         #   (ipi = inverse permutation)
-      ipi[pi[j]] = j
+    #factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
+    #pi = list(map(lambda x:vs.index(x), cliques[c])) 
+    #ipi = list(pi)                   # get permutation mapping: file's order to sorted order
+    #for j in range(len(pi)):         #   (ipi = inverse permutation)
+    #  ipi[pi[j]] = j
     #print 'Building %s : %s,%s : %s'%(cliques[c],factorSize,vs,tSize)
     #
     tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
     t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
-    factors[-1].table = np.array(t2,dtype=float,order='F')
+    factors[-1].table = np.array(t2,dtype=float,order=orderMethod)   # use 'orderMethod' from Factor class
     #
-    if False: # for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
-      tok = next(gen)
-      #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
-      if (tok == '('):               # check for "sparse" (run-length) representation
-        run, comma, val, endparen = next(gen), next(gen), next(gen), next(gen)
-        assert(comma == ',' and endparen==')')
-        for r in range(run):         #   if so, fill run of table with value
-          mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-          factors[-1][mytup] = float(val)
-      else:                          # otherwise just a list of values in the table
-        mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-        factors[-1][mytup] = float(tok)
+    #for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
+    #  tok = next(gen)
+    #  #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
+    #  if (tok == '('):               # check for "sparse" (run-length) representation
+    #    run, comma, val, endparen = next(gen), next(gen), next(gen), next(gen)
+    #    assert(comma == ',' and endparen==')')
+    #    for r in range(run):         #   if so, fill run of table with value
+    #      mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
+    #      factors[-1][mytup] = float(val)
+    #  else:                          # otherwise just a list of values in the table
+    #    mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
+    #    factors[-1][mytup] = float(tok)
 
-  # TODO: read evidence if not None (default filename if "True"?)
-  # condition on evidence?  Or return tuple?
-  # return graphmodel object? 
   return factors
 
 def readEvidence10(evidence_file):
-  """Read UAI-2010 evidence file\
-     The 2010 specification allowed multiple evidence configurations in the same file.
-     evList = readEvidence10('path/file.uai.evid') returns a list of evidence configurations
-     evList[i] is a dictionary, { Xi : xi , ... } indicating that variable Xi = value xi.
+  """Read UAI-2010 evidence file
+
+  The 2010 specification allowed multiple evidence configurations in the same file.
+  >>>  evList = readEvidence10('path/file.uai.evid') 
+
+  Returns a list of evidence configurations; evList[i] is a dictionary, { Xi : xi , ... } 
+  indicating that variable Xi = value xi.
   """
   # read evidence file: 2010 version (multiple evidences)
   gen = readFileByTokens(evidence_file)   # get token generator for the UAI file
@@ -168,10 +112,13 @@ def readEvidence10(evidence_file):
   
 
 def readEvidence14(evidence_file):
-  """Read UAI-2014 evidence file\
-     The 2014 specification allowed only one evidence configuration per file.
-     ev = readEvidence14('path/file.uai.evid') returns an evidence configuration
-     as a dictionary, { Xi : xi , ... } indicating that variable Xi = value xi.
+  """Read a UAI-2014 format evidence file
+
+  The 2014 specification allowed only one evidence configuration per file.
+  >>> ev = readEvidence14('path/file.uai.evid') 
+
+  Returns an evidence configuration as a dictionary, { Xi : xi , ... }, 
+  indicating that variable Xi = value xi.
   """
   # read evidence file: 2014 version (single evidence)
   gen = readFileByTokens(evidence_file)   # get token generator for the UAI file
@@ -200,11 +147,9 @@ def writeUai(filename, factors):
    
     fp.write("{:d}\n".format(len(factors))); # number of factors
     for f in factors:                  # + cliques
-      i#fp.write("{:d} ".format(f.nvar) + " ".join(map(str,f.vars[::-1])) + "\n")
       fp.write("{:d} ".format(f.nvar) + " ".join(map(str,f.vars)) + "\n")
     fp.write("\n")                     # (extra line)
     for f in factors:                  # factor tables
-      #fp.write("{:d} ".format(f.numel()) + " ".join(map(str,f.t.ravel(order=orderMethod))) + "\n")
       fp.write("{:d} ".format(f.numel()) + " ".join(map(str,f.t.ravel(order='C'))) + "\n")
 
  
@@ -213,8 +158,11 @@ def writeUai(filename, factors):
 
 # TODO: test
 def readErgo(filename):
-  """Read in a Bayesian network (list of conditional probabilities) specified in ERGO format
-  factor_list,names,labels = readErgo( 'path/filename.erg' )
+  """ Read in a Bayesian network (list of conditional probabilities) specified in ERGO format
+
+  Example:
+  >>> factor_list,names,labels = readErgo( 'path/filename.erg' )
+
   See e.g. http://graphmod.ics.uci.edu/group/Ergo_file_format for details
   """
   dims = []           # store dimension (# of states) of the variables
@@ -240,24 +188,28 @@ def readErgo(filename):
     vs = VarSet(cliques[c])
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
-    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
-    pi = list(map(lambda x:vs.index(x), cliques[c]))
-    ipi = list(pi)                   # get permutation mapping: file's order to sorted order
-    for j in range(len(pi)):         #   (ipi = inverse permutation)
-      ipi[pi[j]] = j
+    #factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
+    #pi = list(map(lambda x:vs.index(x), cliques[c]))
+    #ipi = list(pi)                   # get permutation mapping: file's order to sorted order
+    #for j in range(len(pi)):         #   (ipi = inverse permutation)
+    #  ipi[pi[j]] = j
     #print 'Building %s : %s,%s : %s'%(cliques[c],factorSize,vs,tSize)
-    for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
-      tok = next(gen)
-      #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
-      if (tok == '('):               # check for "sparse" (run-length) representation
-        run, comma, val, endparen = next(gen), next(gen), next(gen), next(gen)
-        assert(comma == ',' and endparen==')')
-        for r in range(run):         #   if so, fill run of table with value
-          mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-          factors[-1][mytup] = float(val)
-      else:                          # otherwise just a list of values in the table
-        mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-        factors[-1][mytup] = float(tok)
+    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
+    t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
+    factors[-1].table = np.array(t2,dtype=float,order=orderMethod)   # use 'orderMethod' from Factor class
+    #
+    #for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
+    #  tok = next(gen)
+    #  #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
+    #  if (tok == '('):               # check for "sparse" (run-length) representation
+    #    run, comma, val, endparen = next(gen), next(gen), next(gen), next(gen)
+    #    assert(comma == ',' and endparen==')')
+    #    for r in range(run):         #   if so, fill run of table with value
+    #      mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
+    #      factors[-1][mytup] = float(val)
+    #  else:                          # otherwise just a list of values in the table
+    #    mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
+    #    factors[-1][mytup] = float(tok)
 
   names,labels = [],[]
 
@@ -269,10 +221,6 @@ def readErgo(filename):
     for j in range(dims[i]):
       labels[-1].append( str(next(gen)) )
   
-
-  # TODO: read evidence if not None (default filename if "True"?)
-  # condition on evidence?  Or return tuple?
-  # return graphmodel object? 
   return factors,names,labels
 
 
@@ -281,8 +229,11 @@ def readErgo(filename):
 
 # TODO: test
 def readWCSP(filename):
-  """Read in a weighted CSP (list of neg-log factors) specified in WCSP format
-  factor_list,name,upperbound = readWCSP( 'path/filename.wcsp' )
+  """ Read in a weighted CSP (list of neg-log factors) specified in WCSP format
+  
+  Example:
+  >>> factor_list,name,upperbound = readWCSP( 'path/filename.wcsp' )
+ 
   See e.g. http://graphmod.ics.uci.edu/group/WCSP_file_format
   """
   gen = readFileByTokens(filename)   # get token generator for the UAI file
@@ -324,7 +275,9 @@ def readWCSP(filename):
 
 # TODO: test
 def writeWCSP(filename, factors):
-  """Write 'filename' in weighted CSP format (see e.g. http://graphmod.ics.uci.edu/group/WCSP_file_format)
+  """Write 'filename' in weighted CSP format 
+
+  (see http://graphmod.ics.uci.edu/group/WCSP_file_format)
   TODO: exploit sparsity (use most common value in table)
   """
   with open(filename,'w') as fp:
@@ -351,12 +304,114 @@ def writeWCSP(filename, factors):
         fp.write(" ".join(map(str,tup)))
         fp.write(" {:d}\n".format(f[tup]))
 
- 
+
+def readLimid(filename):
+  """Read in a LIMID file (Maua format)
+
+  Example: get CPTs for chance nodes C, uniform policies D, and utilities U:
+  >>>  C,D,U = readLimid(filename) 
+
+  See e.g. https://github.com/denismaua/kpu-pp
+  TODO: may have an error in variable orderings?  Hard to tell from Denis' page.
+  TODO: seems to expect multiplicative utility functions?
+  """
+  dims = []           # store dimension (# of states) of the variables
+  i = 0               # (local index over variables)
+  cliques = []        # cliques (scopes) of the factors we read in
+  factors = []        # the factors themselves
+
+  gen = readFileByTokens(filename)   # get token generator for the UAI file
+  type = str(next(gen))
+  if type=='/*': 
+    while type[-2:]!='*/': type = str(next(gen))
+    type = str(next(gen))
+  if type != 'LIMID': raise ValueError('Not LIMID file?')
+  nC = int(next(gen))
+  nD = int(next(gen))
+  nU = int(next(gen))
+
+  for i in range(nC+nD):             #   and their dimensions (states)
+    dims.append( int(next(gen)) )
+  nCliques = nC + nD + nU            # one CPT per chance node 
+  for c in range(nCliques):          #
+    cSize = int(next(gen))           # number of parents
+    if c < nC + nD: 
+      cliques.append([Var(c,dims[c])])  # CPT for chance node c or decision node d; else utility
+    else:
+      cliques.append([])             
+    for i in range(cSize):           #   get list of parents
+      v = int(next(gen))
+      cliques[-1].append( Var(v,dims[v]) )
+    cliques[-1] = list(reversed(cliques[-1]))   # !!!! can't tell if this is right !!!
+    #print cliques[-1]
+  factors = [None]*(nCliques)
+  for c in range(nC,nC+nD): factors[c] = Factor(cliques[c],1.0/dims[c]);  # uniform initial policy
+  CpU = range(nC)
+  CpU.extend(range(nC+nD,nCliques))
+  for c in CpU:                      # now read in the factor tables:
+    tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
+    vs = VarSet(cliques[c])
+    #print cliques[c], ' => ', vs
+    assert( tSize == vs.nrStates() )
+    factors[c] = Factor(vs)        # add a blank factor
+    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
+    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
+    t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
+    factors[c].table = np.array(t2,dtype=float,order='F')
+
+  return factors[:nC],factors[nC:nC+nD],factors[nC+nD:]
+
+
+
+def Limid2MMAP(C,D,U):
+  """Convert LIMID factors into MMAP factors & query variable list  (Not Implemented)
+
+  Example:
+  >>> factors,query = Limid2MMAP(C,D,U) 
+
+  See also readLimid().
+
+  TODO: add additive utility transformation?  Maua spec seems to be multiplicative?
+  """
+  nC,nD,nU = len(C),len(D),len(U)
+  nV = nC+nD
+  X = [None]*nV
+  for f in C+D: 
+    for v in f.vars:
+      X[v.label] = v
+  nxt = nV
+  DD = []
+  Q  = []
+  for d in range(nD):
+    dd = nC+d
+    par = D[d].vars - [dd]
+    #print "Processing ",dd," parents ",par
+    if par.nrStates()==1:   # no parents => decision variable = map variable
+      Q.append(dd)
+      continue              # otherwise, create one map var per config, for that policy
+    for p in range(par.nrStates()):
+      X.append( Var(nxt,X[dd].states) )   # create MAP var for policy
+      #print "  new query var ",nxt
+      cliq = [v for v in par]
+      cliq.extend( [X[dd],X[nxt]] )
+      tab = np.ones( (par.nrStates(),) + (X[dd].states,X[dd].states) )
+      tab[p,:,:] = np.eye(X[dd].states)
+      tab = np.squeeze(tab)
+      DD.append( Factor(VarSet(cliq), np.transpose(tab, tuple(np.argsort([v.label for v in cliq]))) ) )
+      Q.append(nxt)
+      nxt += 1
+  return C+DD+U, Q
+    
+
 
 
 def readOrder(filename):
-    """Read an elimination order from a file; format "[nvar] [v0] [v1] ... [vn]
-       (note: can also be used for MPE configurations, etc.) """
+    """Read an elimination order from a file
+
+    Elimination orders are stored as unknown length vectors, format "[nvar] [v0] [v1] ... [vn]"
+
+    Note: the same file format may also be useful for MPE configurations, etc.
+    """
     with open(filename,'r') as fp:
         lines = fp.readlines();
     text = lines[-1].strip('\n').split(' ');
@@ -365,8 +420,10 @@ def readOrder(filename):
     if len(vals) != nvar: raise ValueError("Problem with file?");
     return vals
 
+
+
 def writeOrder(filename,order):
-    """Write an elimination order (or other vector) to a file"""
+    """ Write an elimination order (or other vector) to a file """
     with open(filename,'w') as fp:
         fp.write("{} ".format(len(order)));
         fp.write(" ".join(map(str,order)));

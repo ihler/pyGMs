@@ -16,11 +16,12 @@ path, either:
 ```
 $ export PYTHONPATH=${PYTHONPATH}:/directory/containing/
 ```
-or 
+or in Python
 ```
 
 ```
->>> sys.path.append('/directory/containing/')
+import sys
+sys.path.append('/directory/containing/')
 ```
 
 

@@ -143,9 +143,33 @@ class testGraphModel(unittest.TestCase):
 
 
 
-
   # test condition() function : valid config & invalid config
   def testCondition(self):
+    x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
+    flist = []
+    flist.append( Factor( [x[0],x[2]] , [ [0.1,0.9],[0.33,0.67] ] ) )
+    flist.append( Factor( [x[0],x[4]] , [0.45,0.62,0.80,0.93,0.74,0.18,0.41,0.94,0.92,0.42] ) )
+    flist.append( Factor( [x[0],x[1]] , [0.82,0.91,0.13,0.19,0.64,0.10] ) )
+    flist.append( Factor( [x[1],x[4]] , [0.46,1.51,0.97,1.17,1.21,0.76,0.81,1.82,1.32,1.48,1.56,1.07,0.80,0.93,0.74] ) )
+    gmo = GraphModel(flist)
+    jt = flist[0]*flist[1]*flist[2]*flist[3]
+    gmo.condition({0:1})
+    self.assertEqual( len(gmo.factorsWith(1)) , 2 )           # check factor structure of conditional
+    self.assertEqual( gmo.factorsWith(1)[0].vars , VarSet([x[1]]) )  
+    self.assertTrue( abs(        jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )  # consistent assign of x0 = no change
+    self.assertTrue( abs( np.log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
+    self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x0 should produce 0.0
+
+    gmo = GraphModel(flist)
+    jt = flist[0]*flist[1]*flist[2]*flist[3]
+    gmo.condition({4:1, 2:0})
+    self.assertTrue( abs(        jt[(1,2,0,1)]  - gmo.value(   [1,2,0,0,1]) ) < tol )  # consistent assign x2,4 = no change
+    self.assertTrue( abs( np.log(jt[(1,2,0,1)]) - gmo.logValue([1,2,0,0,1]) ) < tol )
+    self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
+
+
+  # test condition() function : valid config & invalid config
+  def testCondition2(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
     flist.append( Factor( [x[0],x[2]] , [ [0.1,0.9],[0.33,0.67] ] ) )
