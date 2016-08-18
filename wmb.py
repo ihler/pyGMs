@@ -56,6 +56,8 @@ class WMB(object):
     def __init__(self, model, elimOrder=None, iBound=0, sBound=0, weights=1.0, **kwargs):
         # save a reference to our model
         self.model = model
+        self.X     = model.X
+        self.logValue = model.logValue
 
         # create & process elimination ordering of the model:
         if elimOrder is None: elimOrder = 'wtminfill'
@@ -357,6 +359,14 @@ class WMB(object):
         return return_beliefs
 
 
+    def reparameterize(self):
+        for i,b in enumerate(self.buckets):
+          for j,mb in enumerate(b):
+            if mb.parent is not None:
+              mb.theta -= mb.msgFwd
+              mb.parent.theta += mb.msgFwd
+              mb.msgFwd *= 0.0
+
 
     def gdd_update(self,maxstep=1.0,threshold=0.01):
         def wt_elim(f,w,pri):
@@ -376,24 +386,49 @@ class WMB(object):
               lnmu = lnmu + (lnZ0 - lnZ1)*(1.0/w[i])
               lnZ0 = lnZ1
             return lnmu.expIP()
-        def armijo(thetas,weights,pri,maxstep,threshold,direction):
-            f0 = calc_bound(thetas,weights,pri)
-            #print [th for th in thetas], f0
+        def armijo(thetas,weights,pri,steps,threshold=1e-4,direction=+1):
+            f1 = calc_bound(thetas,weights,pri)
             match = reduce(lambda a,b: a&b, [th.vars for th in thetas], thetas[0].vars)
-            mus = [mu(th,wt,pri).marginal(match) for th,wt in zip(thetas,weights)]
-            dL = [mus[0]-mus[i] for i in range(len(mus))]
-            dL[0] = -sum(dL)
-            gradnorm = sum([ (df**2.0).sum() for df in dL ])
-            for j in range(10):
-              newthetas = [th+(direction*maxstep*df) for th,df in zip(thetas,dL)]   # redo; modify df directly
-              f1 = calc_bound(newthetas,weights,pri)
-              #print "  ",f0," => ",f1, "  (",f0-f1,' ~ ',maxstep*threshold*gradnorm,")"
-              if (f0 - f1)*direction > maxstep*threshold*gradnorm:
-                for th,nth in zip(thetas,newthetas): th.t[:]=nth.t   # rewrite tables
-                return
-              else:
-                maxstep *= 0.5
-            return # give up?
+            for s in range(steps):
+              mus = [mu(th,wt,pri).marginal(match) for th,wt in zip(thetas,weights)]
+              dL = [mus[0]-mus[i] for i in range(len(mus))]
+              dL[0] = -sum(dL)
+              gradmag  = sum([ df.abs().sum() for df in dL ])
+              gradmax  = max([ df.abs().max() for df in dL ])
+              gradnorm = sum([ (df**2.0).sum() for df in dL ])
+              if gradmax < 1e-8: return    # "optTol" : gradient small => local optimum  (use max(abs(g))?)
+              stepsize = min(1.0, 1.0/gradmag) if s==0 else min(1.0, direction*(f0-f1)/gradmag)
+              stepsize = stepsize if stepsize > 0 else 1.0
+              f0 = f1;   # update "old" objective value
+              for j in range(10):
+                newthetas = [th+(direction*stepsize*df) for th,df in zip(thetas,dL)]   # redo; modify df directly
+                f1 = calc_bound(newthetas,weights,pri)
+                #print "  ",f0," => ",f1, "  (",f0-f1,' ~ ',stepsize*threshold*gradnorm,")"
+                if (f0 - f1)*direction > stepsize*threshold*gradnorm:
+                  for th,nth in zip(thetas,newthetas): th.t[:]=nth.t   # rewrite tables
+                  break;
+                else:
+                  stepsize *= 0.5
+                  if stepsize*gradmax < 1e-8: return  # < progTol => no progress possible
+
+        #def armijo(thetas,weights,pri,maxstep,threshold,direction):
+        #    f0 = calc_bound(thetas,weights,pri)
+        #    #print [th for th in thetas], f0
+        #    match = reduce(lambda a,b: a&b, [th.vars for th in thetas], thetas[0].vars)
+        #    mus = [mu(th,wt,pri).marginal(match) for th,wt in zip(thetas,weights)]
+        #    dL = [mus[0]-mus[i] for i in range(len(mus))]
+        #    dL[0] = -sum(dL)
+        #    gradnorm = sum([ (df**2.0).sum() for df in dL ])
+        #    for j in range(10):
+        #      newthetas = [th+(direction*maxstep*df) for th,df in zip(thetas,dL)]   # redo; modify df directly
+        #      f1 = calc_bound(newthetas,weights,pri)
+        #      #print "  ",f0," => ",f1, "  (",f0-f1,' ~ ',maxstep*threshold*gradnorm,")"
+        #      if (f0 - f1)*direction > maxstep*threshold*gradnorm:
+        #        for th,nth in zip(thetas,newthetas): th.t[:]=nth.t   # rewrite tables
+        #        return
+        #      else:
+        #        maxstep *= 0.5
+        #    return # give up?
         ######
         bound = 0.0
         for i,b in enumerate(self.buckets):
@@ -406,14 +441,14 @@ class WMB(object):
             eps = 1e-3 * self.weights[i]    # TODO: doesn't work with mixed weight signs
             weights = [ [eps for x in mb.theta.vars] for mb in b ]
             for j,mb in enumerate(b): weights[j][mb.theta.vars.index(X)] = mb.weight
-            armijo(thetas,weights,self.priority,maxstep,threshold,np.sign(eps))
+            armijo(thetas,weights,self.priority,5,threshold,np.sign(eps))
             for j,mb in enumerate(b):
               if mb.parent is not None:
                 thetas2 = [mb.theta, mb.parent.theta]
                 pi,pj = self.__nodeID(mb.parent)
                 weights2 = [ weights[j], [1e-3*self.weights[pi] for x in mb.parent.theta.vars] ]
                 weights2[1][mb.parent.theta.vars.index(self.model.vars[self.elimOrder[pi]])] = mb.parent.weight
-                armijo(thetas2,weights2,self.priority,maxstep,threshold,np.sign(eps))  # TODO: mixed?
+                armijo(thetas2,weights2,self.priority,5,threshold,np.sign(eps))  # TODO: mixed?
               bound += calc_bound([mb.theta],[weights[j]],self.priority)
         return float(bound)
 
@@ -434,10 +469,28 @@ class WMB(object):
             x[X] = bel.argmax()[0]
         return x
 
-    def heuristic(self,x):
-        """Evaluate the bound given partial assignment x"""
-        raise NotImplementedError   # TODO: fix
+    def initHeuristic(self):
+        """TODO: make this function unnecessary; make work for and/or pseudotree (currently or only)"""
+        self.atElim = [ [] for b in self.buckets ]
+        for i,b in enumerate(self.buckets):
+          for j,mb in enumerate(b):
+            if mb.parent is not None:
+              pi,pj = self.__nodeID(mb.parent)
+              for ii in range(i+1,pi+1): self.atElim[ii].append(mb);
+
+    def heuristic(self,X,config):
+        """Evaluate the bound given partial assignment 'config' (including variable X and all later)"""
+        return sum([mb.msgFwd.valueMap(config) for mb in self.atElim[X]])
+        #raise NotImplementedError   # TODO: fix
         # need desired pseudo-tree & track messages passing between earlier & later buckets
+
+    def resolved(self,X,config):
+        """Evaluate the resolved value of a partial assignment 'config' (including variable X and all later)"""
+        return sum([mb.theta.valueMap(config) for b in self.buckets[self.priority[X]:] for mb in b])
+
+    def newly_resolved(self,X,config):
+        """Evaluate the change in resolved value of a partial assignment 'config' after clamping X"""
+        return sum([mb.theta.valueMap(config) for mb in self.buckets[self.priority[X]]])
 
     def sample(self):  
         """Draw a sample from the WMB-IS mixture proposal (assumes sum+ task)"""

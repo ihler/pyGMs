@@ -74,12 +74,14 @@ class GraphModel(object):
     if not self.isLog:
       for f in self.factors: f.logIP()
       self.isLog = True
+    return self
 
   def toExp(self):
     """Convert internal factors to exp form (product of probabilities) if not.  May use 'isLog' to check."""
     if self.isLog:
       for f in self.factors: f.expIP()
       self.isLog = False
+    return self
  
   def copy(self):
     """Return a (deep) copy of the graphical model"""
@@ -133,9 +135,9 @@ class GraphModel(object):
         self.removeFactors([f])
 
 
-  def factorsWith(self,v):
+  def factorsWith(self,v,copy=True):
     """Get the list of all factors that include variable v"""
-    return self.factorsByVar[v].copy()
+    return self.factorsByVar[v].copy() if copy else self.factorsByVar[v]
 
   def factorsWithAny(self,vs):
     """Get the list of all factors that include any variables in the list vs"""
