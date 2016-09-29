@@ -6,7 +6,7 @@ import time as time
 import heapq
 from .factor import *
 from .wmb import *
-
+from .wogm import *
 
 """
 Search algos:
@@ -209,26 +209,39 @@ class WmbStatic(object):
 class WmbDynamic(object):
   """Dynamic heuristic function based on a (weighted) minibucket bound"""
   def __init__(self, model, *args, **kwargs):
-    self.wmb = WMB(model,*args,**kwargs);
-    self.bound = self.wmb.msgForward(1.0,0.1)
-    self.wmb.initHeuristic()
+    self.wogm = WOGraphModel(model.factors,*args,isLog=model.isLog,**kwargs)
+    self.wogm.init()
+    self.wogm.update(stopIter=2,stopTime=1.0)
+    self.bound = self.wogm.factors[0][0]
+    #self.wmb = WMB(model,*args,**kwargs);
+    #self.bound = self.wmb.msgForward(1.0,0.1)
+    #self.wmb.initHeuristic()
 
   def update(self, config, Xi, xi):
     """Condition the heuristic on new assignment Xi=xi"""
     if Xi is None: return self, self.bound 
     else: 
-      model = self.wmb.model.copy()
-      model.condition({Xi:xi})
-      H = WmbDynamic(model,self.wmb.elimOrder,iBound=1,weights=self.wmb.weights)
-      return H,H.bound
+      H = WmbDynamic( self.wogm, elimOrder = self.wogm.elimOrder, weights=self.wogm.weights )
+      H.wogm.condition({Xi:xi})   # TODO: make more streamlined
+      H.wogm.update(stopIter=2,stopTime=1.0)
+      return H, H.wogm.factors[0][0]
+      #model = self.wmb.model.copy()
+      #model.condition({Xi:xi})
+      #H = WmbDynamic(model,self.wmb.elimOrder,iBound=1,weights=self.wmb.weights)
+      #return H,H.bound
 
   def next_var(self, config, Xi, xi):
     """Select next unassigned variable & preliminary scores for ordering"""
     X = None
-    for xi in self.wmb.X: 
-      if xi not in config: X=xi
-    vals = [ self.bound for i in range(X.states) ] if X is not None else []
-    return X,vals
+    scores = [ inf if X in config else self.wogm.v_beliefs[X].entropy() for X in self.wogm.X ]
+    #scores = [ inf if X in config else -len(self.wogm.factorsWith(X)) for X in self.wogm.X ]
+    X = np.argmin(scores)
+    vals = self.wogm.costtogo(X).table
+    return X, vals
+    #for xi in self.wmb.X: 
+    #  if xi not in config: X=xi
+    #vals = [ self.bound for i in range(X.states) ] if X is not None else []
+    #return X,vals
 
 
 

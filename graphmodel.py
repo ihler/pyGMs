@@ -29,13 +29,12 @@ class GraphModel(object):
   >>> flist = readUai('myfile.uai')  # read a list of factors from a UAI format file
   >>> model = GraphModel(flist)      # makes a copy of the factors for manipulation
 
-  The model may be stored in an exponential, product of factors form:  F = \prod_r f_r(X_r)
-  or in a log-probability, sum of factors form:  F = \sum_r \theta_r(X_r)
+  The model may be stored in an exponential, product of factors form:  f(X) = \prod_r f_r(X_r)
+  or in a log-probability, sum of factors form:  \theta(X) = \sum_r \theta_r(X_r)
   
   Various accessor functions enable finding factors that depend on one or more variables, variables that
   share one or more factors (their Markov blanket), manipulations to the graph (such as eliminating one
   or more variables), and visualization (through networkx).
-
   """
 
   X            = []            # variables model defined over
@@ -107,7 +106,7 @@ class GraphModel(object):
   def removeFactors(self,flist):
     """Remove a list of factors from the model
     
-    >>> removeFactors(factorsWith([0]))    # remove all factors involving X0
+    >>> model.removeFactors(model.factorsWith([0]))    # remove all factors involving X0
     """
     self.factors.difference_update(flist)
     for f in flist:

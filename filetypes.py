@@ -63,28 +63,14 @@ def readUai(filename):
     assert( tSize == vs.nrStates() )
     factors.append(Factor(vs))       # add a blank factor
     factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
-    #pi = list(map(lambda x:vs.index(x), cliques[c])) 
-    #ipi = list(pi)                   # get permutation mapping: file's order to sorted order
-    #for j in range(len(pi)):         #   (ipi = inverse permutation)
-    #  ipi[pi[j]] = j
-    #print 'Building %s : %s,%s : %s'%(cliques[c],factorSize,vs,tSize)
-    #
     tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
     t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
     factors[-1].table = np.array(t2,dtype=float,order=orderMethod)   # use 'orderMethod' from Factor class
-    #
-    #for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
-    #  tok = next(gen)
-    #  #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
-    #  if (tok == '('):               # check for "sparse" (run-length) representation
-    #    run, comma, val, endparen = next(gen), next(gen), next(gen), next(gen)
-    #    assert(comma == ',' and endparen==')')
-    #    for r in range(run):         #   if so, fill run of table with value
-    #      mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-    #      factors[-1][mytup] = float(val)
-    #  else:                          # otherwise just a list of values in the table
-    #    mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-    #    factors[-1][mytup] = float(tok)
+
+  used = np.zeros((nVar,))
+  for f in factors: used[f.v.labels] = 1
+  for i in range(nVar):              # fill in singleton factors for any missing variables
+    if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
 
   return factors
 
