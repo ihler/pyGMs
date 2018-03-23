@@ -4,9 +4,9 @@ pyGM/filetypes.py
 Read / write methods for graphical model file types (UAI, WCSP, etc.)
 
 readUai  /  writeUai            : read/write UAI competition file format
-readEvidence10, readEvidence14  : read/write UAI, Ergo evidence format
-readErgo                        : read Ergo Bayes net format
-readWCSP                        : read WCSP weighted CSP format
+readEvidence10, readEvidence14  : read/write UAI, Ergo evidence formats (14: single evidence)
+readErgo                        : read Ergo Bayes Net format
+readWCSP /  writeWCSP           : read/write WCSP weighted CSP format
 
 Version 0.0.1 (2015-09-28)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -23,56 +23,168 @@ def readFileByTokens(path, specials=[]):
   spliton = '([\s'+''.join(specials)+'])'
   with open(path, 'r') as fp:
     for line in fp:
-      if line[-1]=='\n': line = line[:-1]
-      tok = re.split(spliton,line)
-      for t in tok: 
-        t = t.strip()
-        if t != '':
-          yield t
+      #if line[-1]=='\n': line = line[:-1]
+      tok = [t.strip() for t in re.split(spliton,line) if t and not t.isspace()]
+      for t in tok: yield t
+        #t = t.strip()
+        #if t != '':
+        #  yield t
+
+
+def stripComments(gen, start=['/*'],end=['*/']):
+  while True:
+    t = next(gen)
+    if t not in start: 
+      yield t
+    else:
+      while t not in end: 
+        t = next(gen) 
+
+
+################################################################################################
+# Temporary functions for testing file parse speed, etc.
+################################################################################################
+def readFileByTokensNEW(path, specials=[]):
+  """Helper function for parsing pyGM file formats"""
+  with open(path,'r') as fp:
+    tok0 = fp.readline()
+    yield tok0
+    txt = fp.read()
+  #for t in txt.split(): yield t
+  for t in map(float, txt.split()): yield t
 
 
 
-def readUai(filename):
-  """Read in a collection (list) of factors specified in UAI 2010 format
+
+def readTEST(filename):
+  """Read in a collection (list) of factors specified in UAI (2006-?) format
 
   Example:
-  >>> factor_list = readUai10( 'path/filename.uai' )
+  >>> factor_list = readUai( 'path/filename.uai' )
   """
   dims = []           # store dimension (# of states) of the variables
   i = 0               # (local index over variables)
   cliques = []        # cliques (scopes) of the factors we read in
   factors = []        # the factors themselves
-  evid = {}           # any evidence  (TODO: remove)
 
   gen = readFileByTokens(filename,'(),')   # get token generator for the UAI file
   type = next(gen)                   # read file type = Bayes,Markov,Sparse,etc
   nVar = int(next(gen))              # get the number of variables
-  for i in range(nVar):              #   and their dimensions (states)
-    dims.append( int(next(gen)) )
+  dims = [int(next(gen)) for i in xrange(nVar)] #   and their dimensions (states)
   nCliques = int(next(gen))          # get the number of cliques / factors
-  for c in range(nCliques):          #   and their variables / scopes
+  cliques = [ None ] * nCliques
+  for c in xrange(nCliques): 
     cSize = int(next(gen))           #   (size of clique)
-    cliques.append([])
-    for i in range(cSize):           #   ( + list of variable ids)
-      v = int(next(gen))
-      cliques[-1].append( Var(v,dims[v]) )
-    #print cliques[-1]
-  for c in range(nCliques):          # now read in the factor tables:
+    cliques[c] = [int(next(gen)) for i in xrange(cSize)]
+  factors = [ None ] * nCliques 
+  for c in xrange(nCliques):          # now read in the factor tables:
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
-    vs = VarSet(cliques[c])
+    vs = VarSet([Var(v,dims[v]) for v in cliques[c]])
     assert( tSize == vs.nrStates() )
-    factors.append(Factor(vs))       # add a blank factor
-    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
-    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
-    t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
-    factors[-1].table = np.array(t2,dtype=float,order=orderMethod)   # use 'orderMethod' from Factor class
+    factorSize = tuple(dims[v] for v in cliques[c]) if len(cliques[c]) else (1,)
+    tab = np.array([next(gen) for tup in xrange(tSize)],dtype=float,order='C').reshape(factorSize)
+    tab = np.transpose(tab, tuple(np.argsort(cliques[c])))
+    factors[c] = Factor(vs, np.array(tab,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
 
   used = np.zeros((nVar,))
   for f in factors: used[f.v.labels] = 1
-  for i in range(nVar):              # fill in singleton factors for any missing variables
+  for i in xrange(nVar):              # fill in singleton factors for any missing variables
     if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
 
   return factors
+
+
+def readTEST2(filename):
+  with open(filename,'r') as fp:
+    fp.readline()
+    txt = fp.read()
+  data = map(float, txt.split())
+  return data
+
+
+def readTEST3(filename):
+  with open(filename,'rb') as fp:
+    filetype = fp.readline()
+    data = np.fromfile(fp,sep=' ')
+  nVar = int(data[0])
+  dims = data[1:nVar+1].astype('int') 
+  nCliques,gen = int(data[nVar+1]), nVar+2
+  cliques = [ None ] * nCliques
+  for c in xrange(nCliques):
+    cSize = int(data[gen])           #   (size of clique)
+    cliques[c] = data[gen+1:gen+cSize+1].astype('int') 
+    gen = gen+cSize+1
+  factors = [ None ] * nCliques
+  for c in xrange(nCliques):          # now read in the factor tables:
+    tSize = int(data[gen])           #   (# of entries in table = # of states in scope)
+    vs = VarSet([Var(v,dims[v]) for v in cliques[c]])
+    assert( tSize == vs.nrStates() )
+    factorSize = tuple(dims[cliques[c]]) if len(cliques[c]) else (1,)
+    tab = data[gen+1:gen+tSize+1].reshape(factorSize)
+    gen = gen + tSize+1
+    #tab = np.array([next(gen) for tup in xrange(tSize)],dtype=float,order='C').reshape(factorSize)
+    tab = np.transpose(tab, tuple(np.argsort(cliques[c])))
+    #factors[c] = Factor(vs, np.array(tab,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
+    factors[c] = Factor(vs, tab)   # use 'orderMethod' from Factor class
+  
+  used = np.zeros((nVar,))
+  for f in factors: used[f.v.labels] = 1
+  for i in xrange(nVar):              # fill in singleton factors for any missing variables
+    if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
+
+  return factors
+
+
+
+
+  
+
+################################################################################################
+# 
+################################################################################################
+
+
+
+def readUai(filename):
+  """Read in a collection (list) of factors specified in UAI (2006-?) format
+
+  Example:
+  >>> factor_list = readUai( 'path/filename.uai' )
+  """
+  dims = []           # store dimension (# of states) of the variables
+  i = 0               # (local index over variables)
+  cliques = []        # cliques (scopes) of the factors we read in
+  factors = []        # the factors themselves
+
+  gen = readFileByTokens(filename,'(),')   # get token generator for the UAI file
+  type = next(gen)                   # read file type = Bayes,Markov,Sparse,etc
+  nVar = int(next(gen))              # get the number of variables
+  dims = [int(next(gen)) for i in xrange(nVar)] #   and their dimensions (states)
+  nCliques = int(next(gen))          # get the number of cliques / factors
+  cliques = [ None ] * nCliques
+  for c in xrange(nCliques): 
+    cSize = int(next(gen))           #   (size of clique)
+    cliques[c] = [int(next(gen)) for i in xrange(cSize)]
+  factors = [ None ] * nCliques 
+  for c in xrange(nCliques):          # now read in the factor tables:
+    tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
+    vs = VarSet(Var(v,dims[v]) for v in cliques[c])
+    assert( tSize == vs.nrStates() )
+    factorSize = tuple(dims[v] for v in cliques[c]) if len(cliques[c]) else (1,)
+    tab = np.empty(tSize)
+    for i in xrange(tSize): tab[i]=float(next(gen))
+    tab = tab.reshape(factorSize)
+    t2  = np.transpose(tab, tuple(np.argsort(cliques[c])))
+    factors[c] = Factor(vs, np.array(t2,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
+
+  used = np.zeros((nVar,))
+  for f in factors: used[f.v.labels] = 1
+  for i in xrange(nVar):              # fill in singleton factors for any missing variables
+    if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
+
+  return factors
+
+
 
 def readEvidence10(evidence_file):
   """Read UAI-2010 evidence file
@@ -141,8 +253,6 @@ def writeUai(filename, factors):
  
 
 
-
-# TODO: test
 def readErgo(filename):
   """ Read in a Bayesian network (list of conditional probabilities) specified in ERGO format
 
@@ -155,65 +265,40 @@ def readErgo(filename):
   i = 0               # (local index over variables)
   cliques = []        # cliques (scopes) of the factors we read in
   factors = []        # the factors themselves
-  evid = {}           # any evidence  (TODO: remove)
-
-  gen = readFileByTokens(filename)   # get token generator for the UAI file
+  #
+  gen = stripComments(readFileByTokens(filename), ['/*'],['*/'])   # get token generator w/ comments
   nVar = int(next(gen))              # get the number of variables
-  for i in range(nVar):              #   and their dimensions (states)
-    dims.append( int(next(gen)) )
+  dims = [int(next(gen)) for i in xrange(nVar)] #   and their dimensions (states)
   nCliques = nVar                    # Bayes net => one clique per variable
-  for c in range(nCliques):          #   and their variables / scopes
+  cliques = [ None ] * nCliques
+  for c in xrange(nCliques):         #   and their variables / scopes
     cSize = int(next(gen))           #   (number of parents)
-    cliques.append([c])              #   (clique is Xc + parents)
-    for i in range(cSize):           #   ( => read list of parent variable ids)
-      v = int(next(gen))
-      cliques[-1].append( Var(v,dims[v]) )
-    #print cliques[-1]
-  for c in range(nCliques):          # now read in the conditional probabilities
+    cliques[c] = [int(next(gen)) for i in xrange(cSize)]+[c] # (clique is Xc + parents)
+  factors = [ None ] * nCliques
+  for c in xrange(nCliques):         # now read in the conditional probabilities
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
-    vs = VarSet(cliques[c])
+    vs = VarSet(Var(v,dims[v]) for v in cliques[c])
     assert( tSize == vs.nrStates() )
-    factors.append(Factor(vs))       # add a blank factor
-    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
-    #pi = list(map(lambda x:vs.index(x), cliques[c]))
-    #ipi = list(pi)                   # get permutation mapping: file's order to sorted order
-    #for j in range(len(pi)):         #   (ipi = inverse permutation)
-    #  ipi[pi[j]] = j
-    #print 'Building %s : %s,%s : %s'%(cliques[c],factorSize,vs,tSize)
-    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
-    t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
-    factors[-1].table = np.array(t2,dtype=float,order=orderMethod)   # use 'orderMethod' from Factor class
-    #
-    #for tup in np.ndindex(factorSize):  # automatically uai order? ("big endian")
-    #  tok = next(gen)
-    #  #print "%s => %s: %s"%(tup,tuple(tup[ipi[j]] for j in range(len(ipi))),tok)
-    #  if (tok == '('):               # check for "sparse" (run-length) representation
-    #    run, comma, val, endparen = next(gen), next(gen), next(gen), next(gen)
-    #    assert(comma == ',' and endparen==')')
-    #    for r in range(run):         #   if so, fill run of table with value
-    #      mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-    #      factors[-1][mytup] = float(val)
-    #  else:                          # otherwise just a list of values in the table
-    #    mytup = tuple(tup[ipi[j]] for j in range(len(ipi)))
-    #    factors[-1][mytup] = float(tok)
-
+    tab = np.empty(tSize)
+    for i in xrange(tSize): tab[i]=float(next(gen))
+    factorSize = tuple(dims[v] for v in cliques[c]) if len(cliques[c]) else (1,)
+    tab = tab.reshape(factorSize)
+    t2  = np.transpose(tab, tuple(np.argsort(cliques[c])))
+    factors[c] = Factor(vs, np.array(t2,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
+  #
   names,labels = [],[]
-
   for i in range(nVar):
     names.append( str(next(gen)) )
-
   for i in range(nVar):
     labels.append( [] )
     for j in range(dims[i]):
       labels[-1].append( str(next(gen)) )
-  
+  #
   return factors,names,labels
 
 
 
 
-
-# TODO: test
 def readWCSP(filename):
   """ Read in a weighted CSP (list of neg-log factors) specified in WCSP format
   
@@ -259,18 +344,20 @@ def readWCSP(filename):
 
 
 
-# TODO: test
-def writeWCSP(filename, factors):
+def writeWCSP(filename, factors, upper_bound=None, use_float=False):
   """Write 'filename' in weighted CSP format 
 
   (see http://graphmod.ics.uci.edu/group/WCSP_file_format)
-  TODO: exploit sparsity (use most common value in table)
   """
+  #DONE: exploit sparsity (use most common value in table)
+  from collections import Counter
   with open(filename,'w') as fp:
-    nvar = np.max( [np.max( factors[i].vars ) for i in range(len(factors))] ).label + 1
-    dmax = np.max( [np.max( factors[i].dims() ) for i in range(len(factors))] )
-    ub   = np.sum( [factors[i].max() for i in range(len(factors)) ] )
-    default_value = 0
+    nvar = int(np.max( [np.max( factors[i].vars ) for i in range(len(factors))] ).label + 1)
+    dmax = int(np.max( [np.max( factors[i].dims() ) for i in range(len(factors))] ))
+    if upper_bound is None:
+      ub   = int(np.ceil(np.sum( [factors[i].max() for i in range(len(factors)) ] )))
+    else:
+      ub   = upper_bound
     
     dim = [0 for i in range(nvar)]     # get variable dimensions / # states from factors
     for f in factors:
@@ -282,13 +369,18 @@ def writeWCSP(filename, factors):
     fp.write(" ".join(map(str,dim)) + "\n")  # write dimensions of each variable
     for f in factors:                  # write each factor:
       fp.write("{:d} ".format(len(f.vars)))
+      cnt = Counter(f.table.ravel())
+      default_value,n_default = cnt.most_common(1)[0]
       for v in f.vars:                 # first the variable IDs in the factor
         fp.write("{:d} ".format(v.label))
-      fp.write("{:d}\n".format(default_value))  # then the default vaule (unused)
-      factorSize = f.dims() if f.nvar() else (1,)
-      for tup in np.ndindex(factorSize):  # then the value of each tuple
-        fp.write(" ".join(map(str,tup)))
-        fp.write(" {:d}\n".format(f[tup]))
+      if use_float: fp.write("{:f} ".format(default_value))      # then the default vaule
+      else:         fp.write("{:d} ".format(int(default_value))) #  (float or int)
+      fp.write("{:d}\n".format(f.vars.nrStates()-n_default))  # number of non-default values
+      for tup in np.ndindex(f.dims()):          # then the value of each tuple
+        if f[tup] != default_value:
+          fp.write(" ".join(map(str,tup)))
+          if use_float: fp.write(" {:f}\n".format(f[tup]))
+          else:         fp.write(" {:d}\n".format(int(f[tup])))
 
 
 def readLimid(filename):
@@ -357,22 +449,23 @@ def Limid2MMAP(C,D,U):
 
   See also readLimid().
 
-  TODO: add additive utility transformation?  Maua spec seems to be multiplicative?
+  TODO (done): add additive utility transformation?  Maua spec seems to be multiplicative?
   """
   nC,nD,nU = len(C),len(D),len(U)
   nV = nC+nD
   X = [None]*nV
-  for f in C+D: 
+  for f in C+D:              # extract variables from chance & decision factors
     for v in f.vars:
       X[v.label] = v
   nxt = nV
   DD = []
   Q  = []
-  for d in range(nD):
+  for d in range(nD):        # now run through each decision & create MMAP policy vars
     dd = nC+d
     par = D[d].vars - [dd]
     #print "Processing ",dd," parents ",par
     if par.nrStates()==1:   # no parents => decision variable = map variable
+      #DD.append( D[d] )     # don't need to keep factor; do mark variable in query
       Q.append(dd)
       continue              # otherwise, create one map var per config, for that policy
     for p in range(par.nrStates()):
@@ -382,12 +475,117 @@ def Limid2MMAP(C,D,U):
       cliq.extend( [X[dd],X[nxt]] )
       tab = np.ones( (par.nrStates(),) + (X[dd].states,X[dd].states) )
       tab[p,:,:] = np.eye(X[dd].states)
+      tab = tab.reshape( par.dims() + (X[dd].states,X[dd].states) )
       tab = np.squeeze(tab)
       DD.append( Factor(VarSet(cliq), np.transpose(tab, tuple(np.argsort([v.label for v in cliq]))) ) )
       Q.append(nxt)
       nxt += 1
-  return C+DD+U, Q
+  z = Var(nxt, nU)
+  fZ = Factor(z, 1.)
+  for u in range(nU):
+    tmp = U[u]
+    newarr = np.ones( (tmp.vars.nrStates(),nU) )
+    newarr[:,u] = tmp.table.ravel()
+    U[u] = Factor( [v for v in tmp.vars]+[z], newarr.ravel() )
+  return C+DD+U+[fZ], Q
     
+
+def readLimidCRA(filename):
+  """Read in a LIMID file specified by our format with Charles River.
+
+  Example:
+  >>> fChance,fDecision,fUtil = readLimidCRA( 'path/filename.uai' )
+  """
+  dims = []           # store dimension (# of states) of the variables
+  i = 0               # (local index over variables)
+  cliques = []        # cliques (scopes) of the factors we read in
+  factors = []        # the factors themselves
+
+  gen = readFileByTokens(filename,'(),')   # get token generator for the UAI file
+  type = next(gen)                   # read file type = Bayes,Markov,Sparse,etc
+  nVar = int(next(gen))              # get the number of variables
+  for i in range(nVar):              #   and their dimensions (states)
+    dims.append( int(next(gen)) )
+  nChance = int(next(gen))          # get the number of chance node factors
+  nDecision = int(next(gen))        # get the number of decision variables (cliques)
+  nUtil   = int(next(gen))          # get the number of utility functions
+  for c in range(nChance+nDecision+nUtil):  #   get each clique's scopes
+    cSize = int(next(gen))           #   (size of clique)
+    cliques.append([])
+    for i in range(cSize):           #   ( + list of variable ids)
+      v = int(next(gen))
+      cliques[-1].append( Var(v,dims[v]) )
+    #print cliques[-1]
+  chance=cliques[:nChance]
+  decision=cliques[nChance:nChance+nDecision]
+  util=cliques[nChance+nDecision:]
+  cliques = chance + util            # now update to only read chance & util f'ns
+  for c in range(nChance+nUtil):          # now read in the factor tables:
+    tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
+    vs = VarSet(cliques[c])
+    assert( tSize == vs.nrStates() )
+    factors.append(Factor(vs))       # add a blank factor
+    factorSize = tuple(v.states for v in cliques[c]) if len(cliques[c]) else (1,)
+    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
+    t2  = np.transpose(tab, tuple(np.argsort([v.label for v in cliques[c]])))
+    factors[-1].table = np.array(t2,dtype=float,order=orderMethod)   # use 'orderMethod' from Factor class
+
+  used = np.zeros((nVar,))
+  for f in factors: used[f.v.labels] = 1
+  for i in range(nVar):              # fill in singleton factors for any missing variables
+    if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
+
+  return factors[:nChance],decision,factors[nChance:]
+
+
+def LimidCRA2MMAP(C,D,U):
+  """Convert CRA LIMID factors into MMAP factors & query variable list  (Not Implemented)
+
+  Example:
+  >>> factors,query = LimidCRA2MMAP(C,D,U) 
+
+  See also readLimidCRA().
+  """
+  X={}
+  Q=[]
+  DD=[]
+  nC,nD,nU = len(C),len(D),len(U)
+  for c in D:
+    for v in c:
+      X[v.label]=v
+  for f in C+U:
+    for v in f.vars:
+      X[v.label]=v
+  nxt = 1+max(list(X.keys())) 
+  for d in range(len(D)):        # now run through each decision & create MMAP policy vars
+    dd = D[d][-1]                # ??? Last variable is decision ID?
+    if not dd in X: continue     # No probability or utility depends on the decision?
+    par = VarSet([X[v] for v in D[d][:-1]]) 
+    #print "Processing ",dd," parents ",par
+    if par.nrStates()==1:   # no parents => decision variable = map variable
+      #DD.append( D[d] )     # don't need to keep factor; do mark variable in query
+      Q.append(dd)
+      continue              # otherwise, create one map var per config, for that policy
+    for p in range(par.nrStates()):
+      X[nxt] = Var(nxt,X[dd].states)    # create MAP var for policy
+      #print "  new query var ",nxt
+      cliq = D[d][:-1]  
+      cliq.extend( [X[dd],X[nxt]] )
+      tab = np.ones( (par.nrStates(),) + (X[dd].states,X[dd].states) )
+      tab[p,:,:] = np.eye(X[dd].states)
+      tab = tab.reshape( tuple(v.states for v in cliq) ) 
+      tab = np.squeeze(tab)
+      DD.append( Factor(VarSet(cliq), np.transpose(tab, tuple(np.argsort([v.label for v in cliq]))) ) )
+      Q.append(X[nxt])
+      nxt += 1
+  z = Var(nxt, nU)
+  fZ = Factor(z, 1.)
+  for u in range(nU):
+    tmp = U[u]
+    newarr = np.ones( (tmp.vars.nrStates(),nU) )
+    newarr[:,u] = tmp.table.ravel()
+    U[u] = Factor( [v for v in tmp.vars]+[z], newarr.reshape( tmp.dims()+(nU,) ) )
+  return C+DD+U+[fZ], Q
 
 
 

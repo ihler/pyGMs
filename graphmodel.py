@@ -16,6 +16,40 @@ inf = float('inf')
 
 from pyGM.factor import *
 
+
+try:
+    from line_profiler import LineProfiler
+
+    def do_profile(follow=[]):
+        def inner(func):
+            def profiled_func(*args, **kwargs):
+                try:
+                    profiler = LineProfiler()
+                    profiler.add_function(func)
+                    for f in follow:
+                        profiler.add_function(f)
+                    profiler.enable_by_count()
+                    return func(*args, **kwargs)
+                finally:
+                    profiler.print_stats()
+            return profiled_func
+        return inner
+
+except ImportError:
+    def do_profile(follow=[]):
+        "Helpful if you accidentally leave in production!"
+        def inner(func):
+            def nothing(*args, **kwargs):
+                return func(*args, **kwargs)
+            return nothing
+        return inner
+
+def get_number():
+    for x in xrange(5000000):
+        yield x
+
+
+
 # Make a simple sorted set of factors, ordered by clique size, then lexicographical by scope
 def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
 #def factorSet(it=None): return SortedListWithKey(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
@@ -52,7 +86,7 @@ class GraphModel(object):
     # TODO: finish
     return "Graphical model: {} vars, {} factors".format(self.nvar,self.nfactors)
 
-  def __init__(self, factorList=None, copy=True, isLog=False):   # TODO: , log=False)
+  def __init__(self, factorList=None, copy=True, isLog=False):   
     """Create a graphical model object from a factor list.  Maintains local copies of the factors.
 
     Args:
@@ -158,27 +192,21 @@ class GraphModel(object):
     vs -= [v]
     return vs
  
-  def value(self,x):
-    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x"""
-    if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in self.factors ] ) )
-    else:          return np.product( [ f.valueMap(x) for f in self.factors ] )
+  def value(self,x,subset=None):
+    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x
+         if optional subset != None, uses *only* the factors in the Markov blanket of subset
+    """
+    factors = self.factors if subset==None else self.factorsWithAny(subset)
+    if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in factors ] ) )
+    else:          return np.product( [ f.valueMap(x) for f in factors ] )
 
-  def logValue(self,x): 
-    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x"""
-    if self.isLog: return sum( [ f.valueMap(x) for f in self.factors ] ) 
-    else:          return sum( [ np.log(f.valueMap(x)) for f in self.factors ] )
-
-  # TODO: combine with value/logValue?  
-  def valueMB(self,x,xeval):
-    """Evaluate F(x) at config x including *only* factors in the Markov blanket of set/list xeval """
-    if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in self.factorsWithAny(xeval) ] ) )
-    else:          return np.product( [ f.valueMap(x) for f in self.factorsWithAny(xeval) ] )
-
-  def logValueMB(self,x,xeval):    
-    """Evaluate log F(x) at config x including *only* factors in the Markov blanket of set/list xeval """
-    if self.isLog: return sum( [ f.valueMap(x) for f in self.factorsWithAny(xeval) ] ) 
-    else:          return sum( [ np.log(f.valueMap(x)) for f in self.factorsWithAny(xeval) ] )
-
+  def logValue(self,x,subset=None): 
+    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x
+         if optional subset != None, uses *only* the factors in the Markov blanket of subset
+    """
+    factors = self.factors if subset==None else self.factorsWithAny(subset)
+    if self.isLog: return sum( [ f.valueMap(x) for f in factors ] ) 
+    else:          return sum( [ np.log(f.valueMap(x)) for f in factors ] )
 
   def isBinary(self):   # Check whether the model is binary (all variables binary)
     """Check whether the graphical model is binary (all variables <= 2 states)"""
@@ -190,8 +218,9 @@ class GraphModel(object):
 
   def isCSP(self): 
     """Check whether the graphical model is a valid CSP (all zeros or ones)"""
-    isTableCSP = lambda t : all( [ ((v==0.0) | (v==1.0)) for v in np.nditer(t) ] )
-    return all( [isTableCSP(f.table) for f in self.factors] )   # TODO: product semantics
+    if self.isLog: isTableCSP = lambda t : all( (t==-np.inf) | (t==0.) ) 
+    else:          isTableCSP = lambda t : all( (t==0.) | (t==1.) )   
+    return all( [isTableCSP(f.table) for f in self.factors] ) 
 
   def isBN(self, tol=1e-6):  # Check whether the model is a valid Bayes Net
     """Check whether the graphical model is a valid Bayes net (one CPT per variable) """
@@ -204,7 +233,7 @@ class GraphModel(object):
     for f in self.factors:
       X = f.vars[ np.argmax([pri[x] for x in f.vars]) ]     # which is the last variable in this factor?
       found[X] = 1;
-      tmp = f.sum([X]) - 1.0                         # check that each row sums to 1.0; TODO: product semantics
+      tmp = f.sum([X]) - 1.0                         # check that each row sums to 1.0; TODO: assumes product semantics
       try:
         tmp = tmp.absIP().max()
       except:
@@ -258,7 +287,8 @@ class GraphModel(object):
     """Condition (clamp) the graphical model on the partial configuration vs=xs (may be lists or tuples)"""
     self.condition( {v:x for v,x in zip(vs,xs)} );
 
-
+  #def cfg2str(cfg):
+  #  return ''.join(str(cfg[i]) if i in cfg else '-' for i in self.X);
      
   def eliminate(self, elimVars, elimOp):
     """Eliminate (remove) a set of variables from the model
@@ -277,21 +307,26 @@ class GraphModel(object):
         elif elimOp == "min": elimOp = lambda F,X: F.min(X)
         else: raise ValueError("Unrecognized elimination type {}; 'sum','lse','max','min' or custom function".format(elimOp));
     for v in elimVars:
-      F = Factor([],0.0 if self.isLog else 1.0)             
-      for f in self.factorsWith(v): 
-        if self.isLog: F += f
-        else:          F *= f
-        self.removeFactors([f])
-      F = elimOp(F, [v])
-      if isinstance(F, Factor): self.addFactors([F],False)  # add factor F by reference
-      else:  self.addFactors([Factor([],F)],False)          # scalar => add as scalar factor
-      # TODO: could check for existing scalar? or leave as is to preserve independent problem correspondence?
-    self.X[v] = Var(int(v),1)    # remove "concept" of variable v ( => single state)
+      flist = self.factorsWith(v)
+      if len(flist):
+        F = flist[0].copy()
+        for f in self.factorsWith(v)[1:]: 
+          if self.isLog: F += f
+          else:          F *= f
+        self.removeFactors(flist)
+        F = elimOp(F, [v])
+        try:
+          tmp = F.vars                # raise exception if no variables (not Factor or similar)
+          self.addFactors([F],False)  # add factor F by reference
+        except:  
+          self.addFactors([Factor([],F)],False)          # scalar => add as scalar factor
+          # TODO: could check for existing scalar? or leave as is to preserve independent problem correspondence?
+      self.X[v] = Var(int(v),1)    # remove "concept" of variable v ( => single state)
 
   def joint(self):
     """Compute brute-force joint function F(x) = \prod_r f_r(x_r) as a (large) factor"""
-    F = Factor([],0.0 if self.isLog else 1.0)
-    for f in self.factors: 
+    F = self.factors[0].copy()
+    for f in self.factors[1:]: 
       if self.isLog: F += f
       else:          F *= f   
     return F
@@ -302,28 +337,29 @@ class GraphModel(object):
     X = set(self.X)
     while X:
         Xi = X.pop()
-        group = {Xi}
-        queue = [Xi]
+        if Xi.states < 1: continue    # don't include missing variables 
+        group = {Xi}                  # start a new group with this variable
+        queue = [Xi]                  # do DFS on the graph from Xi to find its connected component:
         while queue:
             n = queue.pop()
-            nbrs = self.markovBlanket(n)
-            nbrs.difference_update(group)
-            X.difference_update(nbrs)
-            group.update(nbrs)
-            queue.extend(nbrs)
+            nbrs = self.markovBlanket(n)   # get all connected variables
+            nbrs.difference_update(group)  # remove any we've already seen
+            X.difference_update(nbrs)      # remove new ones from unexplored variable list
+            group.update(nbrs)             # add them to this connected component
+            queue.extend(nbrs)             # and continue exploring from them in DFS order
         components.append(group)
     return components
         
     # Note: to split graph into connected components, use e.g.
     # >>> [GraphModel(model.factorsWithAny(vs)) for vs in model.connectedComponents()]
     # (although each model may have the full set of variables, most with 0 or 1 state...)  
-    # NOTE: don't forget about any scalar factors...
+    # NOTE: don't forget about any scalar factors: [f for f in model.factors where f.nvar==0]
     
     
     
 
 
-  def nxMarkovGraph(self):
+  def nxMarkovGraph(self, all_vars=False):
     """Get networkx Graph object of the Markov graph of the model
 
     Example:
@@ -332,11 +368,12 @@ class GraphModel(object):
     """
     import networkx as nx
     G = nx.Graph()
-    G.add_nodes_from( [v.label for v in self.X] )  # TODO: only non-empty / non-trivial variables?
+    G.add_nodes_from( [v.label for v in self.X if (all_vars or v.states > 1)] ) 
     for f in self.factors:
       for v1 in f.vars:
         for v2 in f.vars:
-          if (v1 != v2): G.add_edge(v1.label,v2.label)
+          if (v1 != v2) and (all_vars or (v1.states > 1 and v2.states > 1)): 
+            G.add_edge(v1.label,v2.label)
     return G 
     """ Plotting examples:
     fig,ax=plt.subplots(1,2)
@@ -429,8 +466,6 @@ class GraphModel(object):
 
 
   ############# FUNCTIONS TODO ######################
-  # sampleBN : given a topo ordering, sample in sequence *and* check that each factor is a CPD (?)
-  # pseudotree height, width (or vs andor)
   
   # Algorithms:
   #   (CSP) AC, Backtrack, Local Search;  (GEN) gibbs, mh?, MAS, MBE, WMB, local search, other search?
@@ -477,6 +512,13 @@ def bnOrder(bn):
     return topo_order
 
 
+def bnPrune(bn, query):
+  """Prune all non-ancestors of 'query' in Bayesian network 'bn'
+  """
+  # TODO: implement: find all ancestors of query; remove non-ancestors (do bn-check elim for safety?)
+  raise NotImplementedError('Not implemented')
+
+
 def bnSample(model, order, evidence={}):
   """Draw a sample from a Bayes net with given topological order and evidence E={ Xi: k ... }
 
@@ -486,7 +528,7 @@ def bnSample(model, order, evidence={}):
 
   Returns:
      float : lnP, the log-probability of the sampled configuration xs 
-     list  : xs, the sampled configuration (including evidence)
+     tuple : xs, the sampled configuration (including evidence)
 
   Notes: lnP, the log-probability, does not include any evidence probabilities.  If `model` is not a
      Bayes net, the process and lnP will still correspond to some valid distribution over X given E.
@@ -504,18 +546,17 @@ def bnSample(model, order, evidence={}):
     Pi = Pi.marginal([i])     # likely not necessary, but to be safe for non BNs
     cfg[i] = Pi.sample()[0]
     lnP += np.log( Pi[cfg[i]] )
-  return lnP, tuple(cfg.get(i,0) for i in model.X)    # TODO: map versus tuple?
+  return lnP, tuple(cfg.get(i,0) for i in model.X) 
 
 # One-line likelihood weighting estimator:
-# np.mean( [ np.exp(model.logValue(xs)-lnP) for s in xrange(1000) for lnP,xs in [gm.bnSample(model,order,evid)] ] )
+# np.mean( [ np.exp(model.logValue(xs)-lnP) for s in range(1000) for lnP,xs in [gm.bnSample(model,order,evid)] ] )
 #
 #
 
 
 
-def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
+def _eliminationOrder_OLD(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
   """Find an elimination order for a graphical model
-
   Args:
     gm (GraphModel): A graphical model object
     method (str): Heuristic method; one of {'minfill','wtminfill','minwidth','wtminwidth','random'}
@@ -525,11 +566,9 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None,
     target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
     priority (list, optional): Optional list of variable priorities; lowest priority variables are 
         eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.
-
   Returns:
     list: The identified elimination order
     float: The "score" of this ordering
-
   Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:
   >>> ord, score = eliminationOrder(model, 'minfill', nExtra=2, cutoff=score, target=ord) 
   """
@@ -538,15 +577,15 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None,
   priority = [1 for x in gm.X] if priority is None else priority
 
   if   orderMethod == 'minfill':    score = lambda adj,Xj: sum([0.5*len(adj[Xj]-adj[Xk]) for Xk in adj[Xj]])
-  elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStates() for Xk in adj[Xj]])
+  elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStatesDouble() for Xk in adj[Xj]])
   elif orderMethod == 'minwidth':   score = lambda adj,Xj: len(adj[Xj])
-  elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStates()
+  elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStatesDouble()
   elif orderMethod == 'random':     score = lambda adj,Xj: np.random.rand()
   else: raise ValueError('Unknown ordering method: {}'.format(orderMethod))
 
   adj = [ VarSet([Xi]) for Xi in gm.X ]
   for Xi in gm.X: 
-    for f in gm.factorsWith(Xi):
+    for f in gm.factorsWith(Xi, copy=False):
       adj[Xi] |= f.vars
 
   # initialize priority queue of scores using e.g. heapq or sort
@@ -583,6 +622,73 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None,
     target.extend([None for i in range(len(target),len(_order))])  # make sure order is the right size
     for idx in range(gm.nvar): target[idx]=_order[idx]   # copy result if completed without quitting
   return _order,totalSize
+
+
+def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
+  """Find an elimination order for a graphical model
+
+  Args:
+    gm (GraphModel): A graphical model object
+    method (str): Heuristic method; one of {'minfill','wtminfill','minwidth','wtminwidth','random'}
+    nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds
+        randomness to the order selection process.  0 => randomly from best; -1 => no randomness (default)
+    cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)
+    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
+    priority (list, optional): Optional list of variable priorities; lowest priority variables are 
+        eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.
+
+  Returns:
+    list: The identified elimination order
+    float: The "score" of this ordering
+
+  Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:
+  >>> ord, score = eliminationOrder(model, 'minfill', nExtra=2, cutoff=score, target=ord) 
+  """
+  orderMethod = 'minfill' if orderMethod is None else orderMethod.lower()
+  priority = [1 for x in gm.X] if priority is None else priority
+
+  if   orderMethod == 'minfill':    score = lambda adj,Xj: 0.5*sum([len(adj[Xj]-adj[Xk]) for Xk in adj[Xj]])
+  elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStatesDouble() for Xk in adj[Xj]])
+  elif orderMethod == 'minwidth':   score = lambda adj,Xj: len(adj[Xj])
+  elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStatesDouble()
+  elif orderMethod == 'random':     score = lambda adj,Xj: np.random.rand()
+  else: raise ValueError('Unknown ordering method: {}'.format(orderMethod))
+
+  adj = [ gm.markovBlanket(Xi) for Xi in gm.X ]  # build MRF
+
+  # initialize priority queue of scores using e.g. heapq or sort
+  reverse  = [ (priority[Xi],score(adj,Xi),Xi) for Xi in gm.X ]
+  scores = SortedSet( reverse ); 
+  totalSize = 0.0
+  #_order = np.zeros((len(gm.X),)) #np.array([0 for Xi in gm.X])
+  _order = [0]*len(gm.X)
+
+  for idx in range(gm.nvar):
+    pick = 0
+    Pi,Si,Xi = scores[pick]
+    if nExtra >= 0:
+      mx = bisect.bisect_right(scores, (Pi,Si,gm.X[-1]))  # get one past last equal-priority & score vars
+      pick = min(mx+nExtra, len(scores))                  # then pick a random "near-best" variable
+      pick = np.random.randint(pick)
+      Pi,Si,Xi = scores[pick]
+    del scores[pick]
+    _order[idx] = Xi.label        # write into order[idx] = Xi
+    totalSize += adj[Xi].nrStatesDouble()
+    if totalSize > cutoff: return target,cutoff  # if worse than cutoff, quit with no changes to "target"
+    fix = VarSet()
+    for Xj in adj[Xi]:
+      adj[Xj] |= adj[Xi]
+      adj[Xj] -= [Xi]  # TODO adj[Xj].remove(Xi) slightly faster but still unsupported by cython version
+      fix |= adj[Xj]   # shouldn't need to fix as much for min-width?
+    for Xj in fix:
+      Pj,Sj,Xj = reverse[Xj]
+      scores.remove(reverse[Xj])
+      reverse[Xj] = (Pj,score(adj,Xj),Xj)
+      scores.add(reverse[Xj]) # add (Pj,score(adj,Xj),Xj) to heap & update reverse lookup
+  if not (target is None): 
+    target.extend([None for i in range(len(target),len(_order))])  # make sure order is the right size
+    for idx in range(gm.nvar): target[idx]=_order[idx]   # copy result if completed without quitting
+  return _order,totalSize
     
 
 class PseudoTree(object):
@@ -594,6 +700,7 @@ class PseudoTree(object):
      pt.depth (int): depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain
      pt.size  (float): total # of operations (sum of clique sizes) for the elimination process
   """
+  #@do_profile(follow=[get_number])
   def __init__(self,model,elimOrder,force_or=False,max_width=None):
     """Build the pseudotree. Set force_or=True to force an or-chain pseudotree."""
     self.order  = elimOrder;
@@ -601,7 +708,7 @@ class PseudoTree(object):
     self.width = 0;
     self.depth = 0;
     self.size  = 0.0;
-    height = [0]*len(elimOrder);
+    height = np.zeros((len(elimOrder),),dtype=int);
     priority = np.zeros((len(elimOrder),),dtype=int);
     priority[elimOrder] = np.arange(len(elimOrder));
     if max_width is None: max_width = len(elimOrder);
@@ -623,6 +730,7 @@ class PseudoTree(object):
         if i != len(elimOrder)-1: self.parent[x] = elimOrder[i+1];
       if self.parent[x] is not None:
         height[self.parent[x]] = max(height[self.parent[x]], height[x]+1);
+      #ALT: if self.parent[x] is not None and height[x] >= height[self.parent[x]]: height[self.parent[x]]=height[x]+1
 
     self.depth = max(height);
 
@@ -635,22 +743,6 @@ class PseudoTree(object):
 #  
 
 
-#def bnOrder(model):
-#  """Return a topological order for a Bayes net defined by an (ordered) factor list 
-#     factors[i] should be the conditional probability p(Xi | X_{pa_i}) 
-#  """
-#  todo = set(model.X)
-#  check = set(model.X)
-#  done = set()
-#  order = []
-#  for i in range(len(f_alarm)):
-#    for j in todo:
-#      if len(f_alarm[j].vars - done - [fg_alarm.X[j]]) == 0:
-#        order.append(j.label)
-#        done.add(j)
-#        todo.remove(j)
-#        break
-#  return order
 
 
 # TODO: function to return bayes ordering of factors from the model given topo ordering of X?
@@ -728,20 +820,6 @@ def sampleSequential(model, varOrder, factorOrder=None):
    
 
 
-def __bnSample(model, order):
-  """Draw a sample from a Bayes net model with given topo order """
-  # TODO: fix; return  lnPx, x
-  x = [-1 for Xi in order]   # assumes 0..N ids
-  # TODO: isBN, this need topo ordering of factors
-  for i in order:
-    # which factor is the conditional?  should be one with only earlier vars
-    parents = factors[i].vars - [X[i]]
-    #print str(i)+" has parents "+str(parents)+", values "+str([x[p] for p in parents])
-    Pi = factors[i].condition2( parents, [x[p] for p in parents] )
-    # if scalar (already sampled), save value (fwd sampling?)
-    x[i], = Pi.sample()    # returns length-1 tuple; save value in config x
-  #print "Sample from p(x): " + str( x )
-  return x
 
 ################################################################################################
 # "Vectorize" the model parameters (log factor values), in overcomplete exponential family form.

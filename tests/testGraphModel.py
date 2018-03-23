@@ -61,17 +61,14 @@ class testGraphModel(unittest.TestCase):
 
 
 
-  # TODO: test reading UAI format (technically "factor.py"?)
-  def testUaiFormat(self):
-    return 
 
 
-  # TODO: test that model copies factors (change factor after & recheck?), test copy() function
+  # TODO: unittests that model copies factors (change factor after & recheck?), unittests copy() function
   def testCopy(self):
     return 
 
 
-  # test value(x) function
+  # unittests value(x) function
   def testValue(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
@@ -90,7 +87,7 @@ class testGraphModel(unittest.TestCase):
 
 
 
-  # test factorsWith*() functions
+  # unittests factorsWith*() functions
   def testFactorsWith(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
@@ -122,7 +119,7 @@ class testGraphModel(unittest.TestCase):
 
   
   
-  # test removal of factors: find using "factorsWith" and remove
+  # unittests removal of factors: find using "factorsWith" and remove
   def testFactorsWith(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
@@ -143,7 +140,7 @@ class testGraphModel(unittest.TestCase):
 
 
 
-  # test condition() function : valid config & invalid config
+  # unittests condition() function : valid config & invalid config
   def testCondition(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
@@ -168,7 +165,7 @@ class testGraphModel(unittest.TestCase):
     self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
 
 
-  # test condition() function : valid config & invalid config
+  # unittests condition() function : valid config & invalid config
   def testCondition2(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
@@ -193,7 +190,7 @@ class testGraphModel(unittest.TestCase):
     self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
 
 
-  # test eliminate() function
+  # unittests eliminate() function
   def testEliminate(self):
     x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
     flist = []
@@ -274,6 +271,60 @@ class testGraphModel(unittest.TestCase):
      
 
 
+  # unittest reading UAI format (technically "fileformats.py", but uses graphmodel functions)
+  def testUaiFormat(self):
+    flist = readUai('data/BN_0.uai')
+    gmo = GraphModel(flist)
+    tup=np.array([[1,0,1,0,0,0,0,0,0,1,1,1,1,0,0,0,1,0,1,1,1,0,0,1,1,0,1,0,1,0,1,0,0,0,1,1,1,1,1,0,0,1,0,1,0,0,1,1,1,0,1,0,1,1,1,1,0,0,1,0,1,1,0,1,0,1,0,0,0,1,0,0,0,1,1,1,1,1,1,0,1,0,0,0,0,1,0,0,0,0,0,1,1,0,1,1,0,1,0,1,],
+                  [1,1,1,1,1,0,1,1,0,0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,0,0,1,1,0,0,1,0,0,1,0,0,1,0,1,1,1,1,1,1,0,1,1,1,1,1,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,1,1,0,0,0,1,0,0,1,1,0,1,1,0,1,1,1,0,0,1,1,0,1,1,0,0,1,1,0,0,0,1,],
+                  [0,0,0,1,1,1,1,0,0,0,0,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,0,1,0,1,1,0,0,0,1,0,0,1,0,1,1,0,0,1,0,1,0,0,1,1,0,0,1,1,0,0,1,1,1,0,1,0,1,1,0,0,1,0,1,1,0,1,0,0,1,1,1,0,0,1,0,0,1,1,0,0,1,1,1,1,1,1,1,1,0,1,1,0,],
+                  [0,0,1,1,1,1,1,1,0,0,0,1,1,1,1,1,0,1,1,0,1,1,1,0,0,0,0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,1,1,1,0,0,1,1,1,0,1,1,1,0,0,1,0,0,1,1,0,1,0,0,1,0,0,0,0,1,0,1,1,0,0,0,1,1,1,1,0,1,1,0,1,1,1,0,0,1,1,1,0,0,0,1,1,1,0,0,],
+                  [1,1,1,1,0,1,1,1,0,0,1,1,1,0,0,1,1,1,1,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,1,0,0,0,1,0,1,0,1,1,0,0,1,1,0,1,1,0,1,0,1,1,0,1,1,1,0,0,1,1,1,1,1,0,0,1,1,1,0,0,1,1,1,1,1,0,1,0,0,0,1,1,1,1,1,1,1,1,1,0,0,1,1,1,0,]])
+    val=np.array([-84.861237, -94.723917, -83.536594, -90.002882, -93.109856])
+    for i in range(tup.shape[0]):
+      self.assertTrue( abs(gmo.logValue(tup[i,:]) - val[i] ) < tol )
+
+    evid = readEvidence14('data/BN_0.uai.evid')
+    gmo.condition(evid)
+    val2=np.array([-np.inf, -np.inf, -83.536594, -90.002882, -93.109856])
+    for i in range(tup.shape[0]):
+      if val2[i]==-np.inf: self.assertTrue( gmo.value(tup[i,:]) == 0.)
+      else: self.assertTrue( abs(gmo.logValue(tup[i,:]) - val2[i] ) < tol )
+
+    return 
+
+  
+  # unittest reading WCSP format (technically "fileformats.py", but uses graphmodel functions)
+  def testWCSPFormat(self):
+    flist,name,ubound = readWCSP('data/fourqueens.wcsp')
+    self.assertEqual(name, '4-QUEENS')
+    self.assertEqual(ubound, 1.)
+    model = GraphModel([-f for f in flist], copy=False, isLog=True)
+    self.assertEqual(model.nvar, 4)
+    self.assertEqual(model.logValue([1,3,0,2]),  0.)
+    self.assertEqual(model.logValue([2,0,3,1]),  0.)
+    self.assertEqual(model.logValue([1,3,0,0]), -1.)
+    self.assertEqual(model.logValue([1,2,0,2]), -2.)
+    self.assertEqual(model.logValue([0,1,2,3]), -6.)
+    return 
+
+
+  # unittest reading Ergo format (technically "fileformats.py", but uses graphmodel functions)
+  def testErgoFormat(self):
+    flist,names,labels = readErgo('data/iscas89_s386.scan.erg')
+    self.assertEqual(len(names), 172)
+    self.assertEqual(names[-1], 'G_V9BAR')
+    self.assertEqual(len(labels), 172)
+    self.assertEqual(labels[-1][0]+';'+labels[1][1], 'X0000;X0001')
+    model = GraphModel(flist, copy=False, isLog=False)
+    self.assertTrue( model.isBN() )
+    self.assertTrue( abs(model.logValue((1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1)) - -9.0109133472792884)<tol )
+    self.assertEqual( model.value([0]*172), 0.0 )
+    return 
+
+
+
+  # unittest variable elimination in BN0 model
   def testUaiBN0_VE(self):
     factors = readUai('data/BN_0.uai')
     evid = readEvidence14('data/BN_0.uai.evid')
@@ -291,6 +342,7 @@ class testGraphModel(unittest.TestCase):
     self.assertTrue( eq_tol(model.joint().log(), Factor([],-45.105018), tol) , "lnF {} != -45.105018".format(model.joint().log())) 
 
 
+  # Test junction tree reasoning in BN0 model
   def testUaiBN0_JTree(self):
     factors = readUai('data/BN_0.uai')
     evid = readEvidence14('data/BN_0.uai.evid')

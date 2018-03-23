@@ -7,8 +7,8 @@ Version 0.0.1 (2015-09-28)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
-import numpy as np;
-from sortedcontainers import SortedSet as sset;
+import numpy as np
+from sortedcontainers import SortedSet as sset
 
 try:
   from pyGM.varset_c import Var,VarSet
@@ -76,8 +76,7 @@ class Factor(object):
       self.t = np.empty(self.v.dims(), float, orderMethod);
       self.t[:] = vals                                  # try filling factor with "vals"
     except ValueError:                                  # if it's an incompatible shape,
-      self.t = np.reshape( np.array(vals,float), self.v.dims(), orderMethod) #   try again using reshape
-
+      self.t = np.reshape(np.array(vals, float), self.v.dims(), orderMethod)  # try again using reshape
 
   def __build(self,vs,ndarray):
     """Internal build function from numpy ndarray"""
@@ -137,9 +136,8 @@ class Factor(object):
   def dims(self):
     """Dimensions (table shape) of the tabular factor"""
     return self.t.shape  
-    #return self.v.dims()  # TODO: check (empty? etc)
 
-  #@property  # TODO: make property
+  #@property  # TODO: make property?
   def numel(self):
     """Number of elements (size) of the tabular factor"""
     return self.t.size
@@ -186,7 +184,7 @@ class Factor(object):
   def isAny(self,test):
     """Generic check for any entries satisfying lambda-expression "test" in the factor"""
     for x in np.nditer(self.t, op_flags=['readonly']):
-      if op(x):
+      if test(x):
         return True
     return False
 
@@ -251,17 +249,20 @@ class Factor(object):
 
   def logIP(self):    # just use base?
     """Take the natural log of F:       F.logIP()  =>  F(x) <- log( F(x) )  (in-place)"""
-    np.log(self.t, out=self.t)
+    with np.errstate(divide='ignore'):
+      np.log(self.t, out=self.t)
     return self
 
   def log2IP(self):
     """Take the log base 2 of F:        F.log2IP()  =>  F(x) <- log2( F(x) )  (in-place)"""
-    np.log2(self.t, out=self.t)
+    with np.errstate(divide='ignore'):
+      np.log2(self.t, out=self.t)
     return self
 
   def log10IP(self):
     """Take the log base 10 of F:       F.log10IP()  =>  F(x) <- log10( F(x) )  (in-place)"""
-    np.log10(self.t, out=self.t)
+    with np.errstate(divide='ignore'):
+      np.log10(self.t, out=self.t)
     return self
 
   def negIP(self):
@@ -312,20 +313,23 @@ class Factor(object):
 
   def __div__(self,that):
     """Division of factors, e.g.,  G(x_1,x_2) = F1(x_1) / F2(x_2)"""
-    return self.__opExpand2(that, np.divide)
+    with np.errstate(divide='ignore'):
+      return self.__opExpand2(that, np.divide)
 
   __truediv__ = __div__
 
   def __rdiv__(self,that):
     """Right-divide, e.g. G(x) = 3.0 / F(x)"""
     B = that if isinstance(that,Factor) else Factor([],that)
-    return B.__opExpand2(self, np.divide) 
+    with np.errstate(divide='ignore'):
+      return B.__opExpand2(self, np.divide) 
 
   __rtruediv__ = __rdiv__
 
   def __idiv__(self,that):
     """In-place divide, F1 /= F2.  Most efficient if F2.vars <= F1.vars"""
-    return self.__opExpand2(that,np.divide, out=self)
+    with np.errstate(divide='ignore'):
+      return self.__opExpand2(that,np.divide, out=self)
 
   __itruediv__ = __idiv__
 
@@ -464,16 +468,10 @@ class Factor(object):
   def entropy(self):
     """Compute the entropy of the factor (normalizes, assumes positive)"""
     Z = self.sum()
-    assert (Z > 0), 'Non-normalizable factor (perhaps log factor?)' # also check for positivity?
+    if not (Z > 0): raise ValueError('Non-normalizable factor (perhaps log factor?)')
     tmp = np.ravel(self.t)
-    H = -np.dot( tmp, np.log(tmp.clip(min=1e-300)) )/Z + np.log(Z)  # TODO: change? index ordering?
+    H = -np.dot( tmp, np.log(tmp.clip(min=1e-300)) )/Z + np.log(Z)  # entropy of tmp/Z
     return H
-    #
-    #H = 0.0
-    #for x in np.nditer(self.t, op_flags=['readonly']):
-    #  p = x/Z
-    #  H += 0.0 if p==0 else -p*np.log(p)
-    #return H
 
   def norm(self, distance):
     """Compute any of several norm-like functions on F(x).

@@ -131,6 +131,7 @@ class AStar(object):
     while n.parent is not None: 
       heapq.heapreplace(n.parent.children, (-n.value, n))
       n = n.parent
+      ## TODO: update both "value" and "priority" based on "weight" of n.X
       if n.value == n.children[0][1].value: break;  # didn't change value => stop propagating
       n.value = n.children[0][1].value
     
