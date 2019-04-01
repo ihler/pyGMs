@@ -383,6 +383,47 @@ def writeWCSP(filename, factors, upper_bound=None, use_float=False):
           else:         fp.write(" {:d}\n".format(int(f[tup])))
 
 
+def readDSL(filename):
+  """Read GeNIe XML DSL format Bayesian network"""
+  # TODO: check table entry order
+  import xml.etree.ElementTree as ET
+  tree = ET.parse(filename)
+  root = tree.getroot()
+  nodes = root.findall('nodes')[0]   # extract list of nodes in the model
+  X = {}
+  F,D,U,names,labels = [],[],[],[],[]
+  for node in list(nodes):     # get all the variable def's
+    if node.tag == 'cpt' or node.tag == 'decision':  # cpts & decisions define a variable:
+      name = node.attrib['id']
+      states = node.findall('state')
+      print("{} ({}): {} states".format(name,len(X),len(states)))
+      X[name] = Var(len(X), len(states)) 
+      names.append(name)
+      labels.append([s.attrib['id'] for s in states])
+    # get parents:
+    par  = node.findall('parents')
+    clique  = [] if len(par)==0 else [X[pname] for pname in par[0].text.split()]
+    if node.tag == 'cpt' or node.tag == 'decision': clique = clique + [X[name]]
+    # populate lists:
+    if node.tag == 'cpt':
+      factorSize = tuple(v.states for v in clique)
+      vals  = node.findall('probabilities')[0]
+      tab = np.array([float(f) for f in vals.text.split()]).reshape(factorSize)
+      tab = np.transpose(tab, tuple(np.argsort([v.label for v in clique])))
+      F.append( Factor(VarSet(clique),tab) )
+    elif node.tag == 'decision':
+      D.append( clique )
+    elif node.tag == 'utility':
+      factorSize = tuple(v.states for v in clique)
+      vals  = node.findall('utilities')[0]
+      tab = np.array([float(f) for f in vals.text.split()]).reshape(factorSize)
+      tab = np.transpose(tab, tuple(np.argsort([v.label for v in clique])))
+      U.append( Factor(VarSet(clique),tab) )
+  # return model
+  return F,D,U,names,labels
+
+
+
 def readLimid(filename):
   """Read in a LIMID file (Maua format)
 

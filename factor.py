@@ -8,6 +8,7 @@ Version 0.0.1 (2015-09-28)
 """
 
 import numpy as np
+#import autograd.numpy as np
 from sortedcontainers import SortedSet as sset
 
 try:
@@ -95,7 +96,7 @@ class Factor(object):
     >>> g = changeVars( f, [X7,X5])      # =>  g(X5=b,X7=a) = f(X0=a,X1=b)
     """
     v = VarSet(vars)
-    newOrder = map(lambda x:v.index(x), vars)
+    newOrder = map(lambda x:vars.index(x), v)
     if copy: ret = Factor(v, self.t.transpose(newOrder))
     else:    ret = Factor().__build(v, self.t.transpose(newOrder))  # try not to copy if possible
     return ret
@@ -560,9 +561,8 @@ class Factor(object):
   def __opExpand2(self,that,op, out=None):
     """Internal combination function; assumes "op" is a numpy build-in (using a ufunc)"""
     if not isinstance(that,Factor): # if not a Factor, must be a scalar; use scalar version:
-      if out is None: out = self.copy()        # make a target if needed
-      op(self.t, that, out=out.t)              # and do the op
-      return out
+      if out is None: return Factor(self.v, op(self.t,that)) # with constructor
+      else: op(self.t, that, out=out.t); return out          # or direct write
     # Non-scalar 2nd argument version:
     A = self
     B = that if isinstance(that,Factor) else Factor([],that)
@@ -570,15 +570,15 @@ class Factor(object):
     dA,dB = vall.expand_dims(A.v, B.v);
     #dA = tuple(x.states if  x in A.v else 1 for x in vall);
     #dB = tuple(x.states if  x in B.v else 1 for x in vall);
-    if ( (out is not None) and (out.v == vall) ):
-      f = out                  # if out can be written to directly, do so
-    else: 
-      f = Factor(vall)         # otherwise, make storage for output function
-    op( A.t.reshape(dA,order='A') , B.t.reshape(dB,order='A'), out=f.t )   # TODO: order=A necessary?
-    if (out is not None and f is not out):
-      out.__build(f.v,f.t)     # if out requested but not used, write f's table into out
-      return out
-    return f
+    if ( (out is not None) and (out.v == vall) ): # if out can be written to directly, do so
+      op( A.t.reshape(dA,order='A') , B.t.reshape(dB,order='A'), out=out.t )   # TODO: order=A necessary?
+    else:
+      t = op( A.t.reshape(dA,order='A') , B.t.reshape(dB,order='A') )   # TODO: order=A necessary?
+      if (out is None): out = Factor()
+      if (len(vall)==0): t = np.asarray([t],dtype=float)
+      out.__build(vall,t)
+    return out
+
 
   def __opReduce1(self,elim,op,init): # TODO: change to IP; caller initializes?
     """Internal reduce / eliminate function; brute force application of arbitrary f'n "op"; slow """
@@ -596,14 +596,14 @@ class Factor(object):
     """Internal reduce / eliminate function; assumes "op" is a numpy build-in (using a ufunc)"""
     if ((elim is None) or (len(elim)==len(self.v))):
       return op(self.t)
-    else:
-      if (out is None):
-        out = Factor(self.v - elim)
-      else:
-        assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
+    elif (out is None):   # non-in-place version
+      ax = tuple(self.v.index(x) for x in elim)
+      out = Factor(self.v - elim, op(self.t, axis=ax))   
+    else:                 # in-place version
+      assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
       ax = tuple(self.v.index(x) for x in elim)
       op(self.t, axis=ax, out=out.t) 
-      return out
+    return out
 
   def __opReduce3(self, elim, op, out=None):  # assumes elim <= self.v
     """Internal reduce / eliminate function; assumes "op" is a numpy build-in (using a ufunc)

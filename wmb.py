@@ -53,7 +53,8 @@ class WMB(object):
             return self.val
 
 
-    def __init__(self, model, elimOrder=None, iBound=0, sBound=0, weights=1.0, **kwargs):
+    def __init__(self, model, elimOrder=None, iBound=0, sBound=0, weights=1.0, attach=True, **kwargs):
+        # TODO: check if model isLog() true
         # save a reference to our model
         self.model = model
         self.X     = model.X
@@ -75,7 +76,7 @@ class WMB(object):
         self.setWeights(weights)   # TODO: duplicate to initialize (!)
         for f in model.factors:
             n = self.addClique(f.vars)
-            n.theta += f.log()                 # include log f(x) in node's log-factor
+            if attach: n.theta += f.log()                 # include log f(x) in node's log-factor
             n.originals.append(f)              # append (pointer to) original f for later reference
         # and set the weights of the buckets:
         self.setWeights(weights)
@@ -173,6 +174,42 @@ class WMB(object):
                 # TODO: fix up match structure?
         # done adding all required cliques; return 1st 
         return added[0]
+
+
+    def detachFactors(self):
+        """Remove factor tables from their associated cliques; speeds up scope-based merging"""
+        for b in self.buckets:
+            for mb in b:
+                mb.theta = Factor([],0.)
+
+    def attachFactors(self):
+        """Re-attach factor tables to their associated cliques for evaluation"""
+        for b in self.buckets:
+            for mb in b:
+                mb.theta = Factor([],0.)
+                for f in mb.originals: mb.theta += f.log()
+
+    def memory(self, bucket=None, use_backward=True):
+        """Compute the total memory (in MB) required for this mini-bucket approximation"""
+        mem = 0.
+        use_buckets = self.buckets if bucket is None else [self.buckets[bucket]]
+        for b in use_buckets:
+            for mb in b:
+                mem += mb.clique.nrStatesDouble() * mb.theta.table.itemsize
+                # TODO: add forward & backward message costs here also
+        return mem / 1024. / 1024.
+
+
+    def scoreByScope(ibound=None, sbound=None):
+      """Returns a scope-based scoring function for use in merge()"""
+      def score(m1,m2):
+        jt = m1.clique | m2.clique
+        if ibound is not None and len(jt) > ibound: return -1
+        if sbound is not None and jt.nrStates() > sbound: return -1
+        mx,mn = max([len(m1.clique),len(m2.clique)]), min([len(m1.clique),len(m2.clique)])
+        return 1.0/(float(mx)+float(mn)/mx)
+      # return the scoring function 
+      return score
 
 
     # score = len(max)+len(min)/len(max) if union < iBound else -1 for scope
@@ -514,7 +551,7 @@ class WMB(object):
             xval = qi.sample(Z=1.0)[0]
             x[X] = xval
             logQx += np.log( qi[xval] )
-        return x,logQx
+        return logQx,x
 
 
 # functions:

@@ -602,9 +602,9 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None,
     nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds
         randomness to the order selection process.  0 => randomly from best; -1 => no randomness (default)
     cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)
-    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
     priority (list, optional): Optional list of variable priorities; lowest priority variables are 
         eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.
+    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
 
   Returns:
     list: The identified elimination order
@@ -669,7 +669,7 @@ class PseudoTree(object):
      pt.depth (int): depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain
      pt.size  (float): total # of operations (sum of clique sizes) for the elimination process
   """
-  def __init__(self,model,elimOrder,force_or=False,max_width=None):
+  def __init__(self, model, elimOrder, force_or=False, max_width=None):
     """Build the pseudotree. Set force_or=True to force an or-chain pseudotree."""
     self.order  = elimOrder;
     self.parent = [None]*len(elimOrder);
@@ -701,6 +701,23 @@ class PseudoTree(object):
       #ALT: if self.parent[x] is not None and height[x] >= height[self.parent[x]]: height[self.parent[x]]=height[x]+1
 
     self.depth = max(height);
+
+  def orderDFS(self, priority=None):
+    """Find an elimination order corresponding to a (reverse) depth-first traversal of the pseudotree"""
+    children = [ [] for v in self.order ]
+    # First find a DFS traversal of the pseudo-tree
+    for i,p in enumerate(self.parent): children[p] += [i]
+    queue = [ i for i,p in self.parent if p is None ]
+    while len(queue):
+      new_order += queue.pop()            # get next variable off queue
+      queue += children[ new_order[-1] ].reverse()  # append children to queue
+    assert( len(new_order) == len(self.order) )
+    # Now, re-order "new_order" to respect the priority structure if necessary:
+    if priority is not None:
+      new_order = [(priority[i],o,i) for o,i in enumerate(new_order) ]
+      new_order.sort()
+      new_order = [i for p,o,i in new_order]  # re-extract variable indices
+    return new_order 
 
 
 ### TODO
