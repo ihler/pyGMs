@@ -20,8 +20,8 @@ from pyGM.factor import *
 
 
 # Make a simple sorted set of factors, ordered by clique size, then lexicographical by scope
-def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
-#def factorSet(it=None): return SortedListWithKey(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1],load=30)
+def factorSet(it=None): return SortedSet(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1])
+#def factorSet(it=None): return SortedListWithKey(iterable=it,key=lambda f:'{:04d}.'.format(f.nvar)+str(f.vars)[1:-1])
 # So, fs = factorSet([list]) will make sure:
 #   fs[0] is a minimal factor (smallest # of variables) and fs[-1] is a maximal factor (largest # of variables)
 
