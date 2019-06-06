@@ -193,14 +193,14 @@ def Metropolis( model, query, proposal, state=None, stopSamples=1, stopTime = in
                   propose random transition "old -> new" and report log q(old->new)/q(new->old)
     """
     state = state if state is not None else [np.random.randint(Xi.states) for Xi in model.X]
-    # TODO: timing check
-    for j in range(nSamples):
-        # TODO if out of time, break
+    j = 0; stopTime += time();
+    while (j < stopSamples) and (time() < stopTime):
         stateNew, logq_ratio = proposal(state)
         # TODO: can be more efficient to only evaluate *change* in state (use logValue(state, subset))
         logf_ratio = model.logValue(stateNew) - model.logValue(state)
         if np.log(np.random.rand(1)) < logf_ratio + logq_ratio: state = stateNew
         query.update(state,1.0)
+        j += 1
     # TODO: some way to track accept/reject ratio easily?
     return query   # TODO: way to return state also, for continuation?  Make object?
 

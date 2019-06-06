@@ -79,7 +79,7 @@ class PrunedDFS(object):
           if n.value > self.L:          #    MPE-specific! TODO
             self.L = n.value; 
             self.xhat = self.cfg.copy(); 
-            if verbose: print "[{}]".format(self.L),[self.xhat[v] for v in self.model.X]
+            if verbose: print("[{}]".format(self.L),[self.xhat[v] for v in self.model.X])
         else:                          # else, update heuristic given n.X = n.x
           n.heuristic, n.value = n.heuristic.update(self.cfg,n.X,n.x)
 
@@ -153,7 +153,7 @@ class AStar(object):
         if self.isLeaf(n):              # for leaf nodes, can evaluate score directly
           n.value = self.model.logValue(self.cfg);
           self.xhat = self.cfg.copy()   #    MPE-specific! TODO
-          if verbose: print "[{}]".format(n.value),[self.xhat[v] for v in self.model.X]
+          if verbose: print("[{}]".format(n.value),[self.xhat[v] for v in self.model.X])
           self.node, self.cfg = self.__next(n)  # go to next node; if it's this node, we're done!
           if self.node == n: self.node = None; break;     # TODO: hacky
         else:                          # else, update heuristic given n.X = n.x
@@ -166,7 +166,7 @@ class AStar(object):
 
         # Now move on to the next node in the queue
         self.node, self.cfg = self.__next(n)
-        #print " => ",self.cfg
+        #print(" => ",self.cfg)
 
 
 

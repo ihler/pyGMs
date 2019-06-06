@@ -54,3 +54,18 @@ def ising_grid(n=10,d=2,sigp=1.0,sigu=0.1):
   #fs.extend( [Factor([X[i],X[j]],np.exp(sigp*np.random.randn(d,d)*(1.0-np.eye(d)))) for i,j in E] )
   return fs
 
+
+def boltzmann(theta_ij):
+  '''Create a pairwise graphical model from a matrix of parameter values.
+       p(x) \propto \exp( \sum_{i\neq j} \theta_{ij} xi xj + \sum_i \theta_{ii} xi )
+     theta : (n,n) array of parameters
+  '''
+  n = theta_ij.shape[0]
+  X = [Var(i,2) for i in range(n)]
+  nzi,nzj = np.nonzero( theta_ij )
+  factors = [None]*len(nzi)
+  for k,i,j in enumerate(zip(nzi,nzj)):
+    if i==j: factors[k] = gm.Factor([X[i]],[0,np.exp(theta[i,i])])
+    else:    factors[k] = gm.Factor([X[i],X[j]],[0,0,0,np.exp(theta[i,j])])
+  return factors
+

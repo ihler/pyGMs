@@ -103,11 +103,11 @@ class Factor(object):
 
   def __repr__(self):
     """Detailed representation: scope (varset) + table memory location"""
-    return 'Factor({:s},[0x{:x}])'.format(self.v,self.t.ctypes.data)
+    return 'Factor({:s},[0x{:x}])'.format(str(self.v),self.t.ctypes.data)
 
   def __str__(self):
     """Basic string representation: scope (varset) only"""
-    return 'Factor({:s})'.format(self.v)
+    return 'Factor({:s})'.format(str(self.v))
 
   @property
   def vars(self):
@@ -449,7 +449,7 @@ class Factor(object):
   def condition2(self, cvars=[],ctuple=[]):
     """Create a clamped (or "sliced") factor using partial conditioning (list+list version)
 
-    >>> F.condition([0,2],[a,b])   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)
+    >>> F.condition2([0,2],[a,b])   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)
     """
     ax = tuple(ctuple[cvars.index(x)] if  x in cvars else slice(None) for x in self.v)
     return Factor(self.v - cvars, self.t[ax])   # forces table copy in constructor
@@ -465,6 +465,10 @@ class Factor(object):
 
   slice2 = condition2   # alternate, libDAI-like names
   slice = condition
+
+  # TODO: assign_slice( evidence, conditional_table ) 
+  #    create ax = tuple( ... );  self.table(ax) = conditional_table
+  # TODO: assign_slice2( vars, vals, conditional_table )
 
   def entropy(self):
     """Compute the entropy of the factor (normalizes, assumes positive)"""

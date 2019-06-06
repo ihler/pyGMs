@@ -1,10 +1,6 @@
 import numpy as np
 from sortedcontainers import SortedSet as sset;
-
-import sys
-if sys.version_info.major > 2:
-  from functools import reduce
-  xrange = range
+from functools import reduce
 
 class Var(object):
   " ""A basic discrete random variable; a pair, (label,#states) "" "

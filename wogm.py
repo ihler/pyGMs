@@ -39,8 +39,13 @@ from .factor import *
 from .graphmodel import *
 
 import time
-from itertools import izip
-reverse_enumerate = lambda l: izip(xrange(len(l)-1, -1, -1), reversed(l))
+from builtins import range
+
+try:
+  from itertools import izip
+except:
+  izip = zip
+reverse_enumerate = lambda l: izip(range(len(l)-1, -1, -1), reversed(l))
 
 
 
@@ -164,7 +169,7 @@ class WOGraphModel(GraphModel):
     """Condition / clamp the graphical model on a partial configuration (dict) {Xi:xi,Xj:xj...}"""
     # TODO: optionally, ensure re-added factor is maximal, or modify an existing one (fWithAll(vs)[-1]?)
     if len(evidence)==0: return
-    for v,x in evidence.iteritems():
+    for v,x in evidence.items():
       constant = 0.0
       for f in self.factorsWith(v):
         self.removeFactors([f])

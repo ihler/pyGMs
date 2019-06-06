@@ -4,6 +4,7 @@ from sortedcontainers import SortedSet;
 
 from pyGM.factor import *
 from pyGM.graphmodel import *
+from builtins import range
 
 inf = float('inf')
 
@@ -24,7 +25,7 @@ def LBP(model, maxIter=100, verbose=False):
             msg[v,f] = Factor([v],1.0)  # init msg[i->alpha]
             msg[f,v] = Factor([v],1.0)  # and  msg[alpha->i]
     
-    for t in xrange(1,maxIter+1):               # for each iteration:
+    for t in range(1,maxIter+1):               # for each iteration:
         # Update beliefs and outgoing messages for each factor:
         for a,f in enumerate(model.factors):
             beliefs_F[a] = f.copy()                 # find f * incoming msgs & normalize
@@ -67,7 +68,7 @@ def NMF(model, maxIter=100, beliefs=None, verbose=False):
         lnZ += m.sum()
     if verbose: print("Iter 0: "+str(lnZ))
 
-    for t in xrange(1,maxIter+1):               # for each iteration:
+    for t in range(1,maxIter+1):               # for each iteration:
         # Update all the beliefs via coordinate ascent:
         for Xi in model.X:                      # for each variable, 
             bNew = 0.0                          # compute E[ log f ] as a function of Xi:
@@ -103,7 +104,7 @@ def DualDecomposition(model, maxIter=100, verbose=False):
     lnR, rhat = -np.inf, np.zeros( (len(model.X),), dtype=int) 
     if verbose: print("Iter 0: "+str(lnF))
             
-    for t in xrange(1,maxIter+1):               # for each iteration:
+    for t in range(1,maxIter+1):               # for each iteration:
         # Update each variable in turn:
         for Xi in model.X:                      # for each variable, 
             flist = model.factorsWith(Xi, copy=False)
@@ -207,7 +208,7 @@ def WeightedDD( factors, weights, elimOrder, direction=1.0, maxIter=100, verbose
     lnZw = calc_bound(thetas,[weights[th] for th in thetas],pri)
     start_time = time.time()
     if verbose: print("Iter 0: "+str(lnZw))
-    for t in xrange(1,maxIter+1):               # for each iteration:
+    for t in range(1,maxIter+1):               # for each iteration:
         # Update each variable in turn:
         for Xi in logmodel.X:                      # for each variable, 
             theta_i = logmodel.factorsWith(Xi) 

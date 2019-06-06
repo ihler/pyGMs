@@ -15,6 +15,8 @@ Version 0.0.1 (2015-09-28)
 import numpy as np;
 from sortedcontainers import SortedSet as sset;
 from pyGM.factor import *
+from builtins import range
+
 
 
 def readFileByTokens(path, specials=[]):
@@ -70,25 +72,25 @@ def readTEST(filename):
   gen = readFileByTokens(filename,'(),')   # get token generator for the UAI file
   type = next(gen)                   # read file type = Bayes,Markov,Sparse,etc
   nVar = int(next(gen))              # get the number of variables
-  dims = [int(next(gen)) for i in xrange(nVar)] #   and their dimensions (states)
+  dims = [int(next(gen)) for i in range(nVar)] #   and their dimensions (states)
   nCliques = int(next(gen))          # get the number of cliques / factors
   cliques = [ None ] * nCliques
-  for c in xrange(nCliques): 
+  for c in range(nCliques): 
     cSize = int(next(gen))           #   (size of clique)
-    cliques[c] = [int(next(gen)) for i in xrange(cSize)]
+    cliques[c] = [int(next(gen)) for i in range(cSize)]
   factors = [ None ] * nCliques 
-  for c in xrange(nCliques):          # now read in the factor tables:
+  for c in range(nCliques):          # now read in the factor tables:
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
     vs = VarSet([Var(v,dims[v]) for v in cliques[c]])
     assert( tSize == vs.nrStates() )
     factorSize = tuple(dims[v] for v in cliques[c]) if len(cliques[c]) else (1,)
-    tab = np.array([next(gen) for tup in xrange(tSize)],dtype=float,order='C').reshape(factorSize)
+    tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
     tab = np.transpose(tab, tuple(np.argsort(cliques[c])))
     factors[c] = Factor(vs, np.array(tab,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
 
   used = np.zeros((nVar,))
   for f in factors: used[f.v.labels] = 1
-  for i in xrange(nVar):              # fill in singleton factors for any missing variables
+  for i in range(nVar):              # fill in singleton factors for any missing variables
     if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
 
   return factors
@@ -110,26 +112,26 @@ def readTEST3(filename):
   dims = data[1:nVar+1].astype('int') 
   nCliques,gen = int(data[nVar+1]), nVar+2
   cliques = [ None ] * nCliques
-  for c in xrange(nCliques):
+  for c in range(nCliques):
     cSize = int(data[gen])           #   (size of clique)
     cliques[c] = data[gen+1:gen+cSize+1].astype('int') 
     gen = gen+cSize+1
   factors = [ None ] * nCliques
-  for c in xrange(nCliques):          # now read in the factor tables:
+  for c in range(nCliques):          # now read in the factor tables:
     tSize = int(data[gen])           #   (# of entries in table = # of states in scope)
     vs = VarSet([Var(v,dims[v]) for v in cliques[c]])
     assert( tSize == vs.nrStates() )
     factorSize = tuple(dims[cliques[c]]) if len(cliques[c]) else (1,)
     tab = data[gen+1:gen+tSize+1].reshape(factorSize)
     gen = gen + tSize+1
-    #tab = np.array([next(gen) for tup in xrange(tSize)],dtype=float,order='C').reshape(factorSize)
+    #tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order='C').reshape(factorSize)
     tab = np.transpose(tab, tuple(np.argsort(cliques[c])))
     #factors[c] = Factor(vs, np.array(tab,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
     factors[c] = Factor(vs, tab)   # use 'orderMethod' from Factor class
   
   used = np.zeros((nVar,))
   for f in factors: used[f.v.labels] = 1
-  for i in xrange(nVar):              # fill in singleton factors for any missing variables
+  for i in range(nVar):              # fill in singleton factors for any missing variables
     if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
 
   return factors
@@ -159,27 +161,27 @@ def readUai(filename):
   gen = readFileByTokens(filename,'(),')   # get token generator for the UAI file
   type = next(gen)                   # read file type = Bayes,Markov,Sparse,etc
   nVar = int(next(gen))              # get the number of variables
-  dims = [int(next(gen)) for i in xrange(nVar)] #   and their dimensions (states)
+  dims = [int(next(gen)) for i in range(nVar)] #   and their dimensions (states)
   nCliques = int(next(gen))          # get the number of cliques / factors
   cliques = [ None ] * nCliques
-  for c in xrange(nCliques): 
+  for c in range(nCliques): 
     cSize = int(next(gen))           #   (size of clique)
-    cliques[c] = [int(next(gen)) for i in xrange(cSize)]
+    cliques[c] = [int(next(gen)) for i in range(cSize)]
   factors = [ None ] * nCliques 
-  for c in xrange(nCliques):          # now read in the factor tables:
+  for c in range(nCliques):          # now read in the factor tables:
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
     vs = VarSet(Var(v,dims[v]) for v in cliques[c])
     assert( tSize == vs.nrStates() )
     factorSize = tuple(dims[v] for v in cliques[c]) if len(cliques[c]) else (1,)
     tab = np.empty(tSize)
-    for i in xrange(tSize): tab[i]=float(next(gen))
+    for i in range(tSize): tab[i]=float(next(gen))
     tab = tab.reshape(factorSize)
     t2  = np.transpose(tab, tuple(np.argsort(cliques[c])))
     factors[c] = Factor(vs, np.array(t2,dtype=float,order=orderMethod))   # use 'orderMethod' from Factor class
 
   used = np.zeros((nVar,))
   for f in factors: used[f.v.labels] = 1
-  for i in xrange(nVar):              # fill in singleton factors for any missing variables
+  for i in range(nVar):              # fill in singleton factors for any missing variables
     if dims[i] > 1 and not used[i]: factors.append(Factor([Var(i,dims[i])],1.0))
 
   return factors
@@ -268,19 +270,19 @@ def readErgo(filename):
   #
   gen = stripComments(readFileByTokens(filename), ['/*'],['*/'])   # get token generator w/ comments
   nVar = int(next(gen))              # get the number of variables
-  dims = [int(next(gen)) for i in xrange(nVar)] #   and their dimensions (states)
+  dims = [int(next(gen)) for i in range(nVar)] #   and their dimensions (states)
   nCliques = nVar                    # Bayes net => one clique per variable
   cliques = [ None ] * nCliques
-  for c in xrange(nCliques):         #   and their variables / scopes
+  for c in range(nCliques):         #   and their variables / scopes
     cSize = int(next(gen))           #   (number of parents)
-    cliques[c] = [int(next(gen)) for i in xrange(cSize)]+[c] # (clique is Xc + parents)
+    cliques[c] = [int(next(gen)) for i in range(cSize)]+[c] # (clique is Xc + parents)
   factors = [ None ] * nCliques
-  for c in xrange(nCliques):         # now read in the conditional probabilities
+  for c in range(nCliques):         # now read in the conditional probabilities
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
     vs = VarSet(Var(v,dims[v]) for v in cliques[c])
     assert( tSize == vs.nrStates() )
     tab = np.empty(tSize)
-    for i in xrange(tSize): tab[i]=float(next(gen))
+    for i in range(tSize): tab[i]=float(next(gen))
     factorSize = tuple(dims[v] for v in cliques[c]) if len(cliques[c]) else (1,)
     tab = tab.reshape(factorSize)
     t2  = np.transpose(tab, tuple(np.argsort(cliques[c])))

@@ -22,8 +22,14 @@ class WMB:
 from .factor import *
 from .graphmodel import *
 
-from itertools import izip
-reverse_enumerate = lambda l: izip(xrange(len(l)-1, -1, -1), reversed(l))
+from builtins import range
+try:
+    from itertools import izip
+except:
+    izip = zip
+
+
+reverse_enumerate = lambda l: izip(range(len(l)-1, -1, -1), reversed(l))
 
 class WMB(object):
     '''Class implementing weighted mini-bucket elimination inference'''
@@ -44,6 +50,8 @@ class WMB(object):
             return "{}^{}".format(self.clique,self.weight)
         def __str__(self):
             return "{}".format(self.clique)
+        def __lt__(self, other):
+            return False         # don't care about ordering nodes
 
 
     class ConstantList:
@@ -65,7 +73,7 @@ class WMB(object):
         if type(elimOrder) is str:   # auto elim order: check that weights is string or float
             if not type(weights) in {float, str}:
               raise ValueError("Must specify elimination order or use all-equal weights (float or string)"); 
-            elimOrder = eliminationOrder(self.model, orderMethod=elimOrder); 
+            elimOrder = eliminationOrder(self.model, orderMethod=elimOrder)[0];  
         self.elimOrder = elimOrder
         self.priority = [-1 for i in range(model.nvar)]  # build priority of each var
         for i,x in enumerate(elimOrder): self.priority[x] = i
@@ -215,6 +223,8 @@ class WMB(object):
     # score = len(max)+len(min)/len(max) if union < iBound else -1 for scope
     def merge(self, score):
         from heapq import heappush,heappop
+        from itertools import count
+        tiebreak = count().__next__        # need tiebreaker value for priority queue (?)
         for b in self.buckets:
             priority = [] 
             lookup = {}
@@ -224,12 +234,12 @@ class WMB(object):
                 for m2 in b[i+1:]:
                     s = score(m1,m2)
                     if s >= 0.0:
-                        entry = [-s,m1,m2]
+                        entry = [-s,tiebreak(),m1,m2]
                         lookup[(m1,m2)] = entry
                         heappush(priority, entry)
             while len(priority):
                 entry = heappop(priority)
-                s,m1,m2 = entry[0],entry[1],entry[2]
+                s,_,m1,m2 = entry[0],entry[1],entry[2],entry[3]
                 #s,m1,m2 = priority.pop()
                 if m1 is None or m2 is None: continue
                 if m1 not in b or m2 not in b: continue   ## check for removed minibuckets?
@@ -240,7 +250,7 @@ class WMB(object):
                         s = -lookup.get( (ma,mb), [1,None,None] )[0]
                         if s >= 0.0: 
                             entry = lookup.pop( (ma,mb) )
-                            entry[1],entry[2] = None,None  # mark as "removed"
+                            entry[2],entry[3] = None,None  # mark as "removed"
                             #priority.remove( [s,ma,mb] )
                 m12 = self.addClique( m1.clique | m2.clique )
                 # what if others removed?  (bad check above?)
@@ -249,7 +259,7 @@ class WMB(object):
                     if m is m12: continue
                     s = score(m12,m)
                     if s >= 0.0:
-                        entry = [-s,m12,m] 
+                        entry = [-s,tiebreak(),m12,m] 
                         lookup[ (m12,m) ] = entry
                         heappush(priority,entry)
         return None

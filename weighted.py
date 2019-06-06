@@ -47,8 +47,13 @@ from .factor import *
 from .graphmodel import *
 
 import time
-from itertools import izip
-reverse_enumerate = lambda l: izip(xrange(len(l)-1, -1, -1), reversed(l))
+from builtins import range
+
+try:
+  from itertools import izip
+except:
+  izip = zip
+reverse_enumerate = lambda l: izip(range(len(l)-1, -1, -1), reversed(l))
 
 
 one = np.float64(1.0)   # useful for 1/w = inf if w=0
@@ -191,7 +196,7 @@ class WeightedModel(GraphModel):
     """Condition / clamp the graphical model on a partial configuration (dict) {Xi:xi,Xj:xj...}"""
     # TODO: optionally, ensure re-added factor is maximal, or modify an existing one (fWithAll(vs)[-1]?)
     if len(evidence)==0: return
-    for v,x in evidence.iteritems():
+    for v,x in evidence.items():
       constant = 0.0
       for f in self.factorsWith(v):
         self.removeFactors([f])
@@ -245,7 +250,7 @@ class WeightedModel(GraphModel):
         for j,wt,dw in zip(idx,weights,dW): wt[j] *= np.exp( - stepW * wt[j] * (dw-Hbar) ); wtot += wt[j];
         for j,wt,dw in zip(idx,weights,dW): wt[j] /= wtot;
       else:
-        #print [wt[j] for j,wt,dw in zip(idx,weights,dW)]
+        #print([wt[j] for j,wt,dw in zip(idx,weights,dW)])
         ipos = [i for i,j,wt in zip(range(len(idx)),idx,weights) if wt[j]>0] 
         if len(ipos)!=1: raise ValueError('{} positive weights for lower bound?'.format(len(ipos)))
         ipos = ipos[0]
@@ -253,8 +258,8 @@ class WeightedModel(GraphModel):
         for i,j,wt,dw in zip(range(len(idx)),idx,weights,dW): 
           if i!=ipos: wt[j] *= np.exp( - direction * stepW * wt[j] * (dw-Hbar) ); wtot += wt[j];
         weights[ipos][idx[ipos]] = 1 - wtot
-        #print [wt[j] for j,wt,dw in zip(idx,weights,dW)]
-        #print '==='
+        #print([wt[j] for j,wt,dw in zip(idx,weights,dW)])
+        #print('===')
 
 
   def maxsumdiff(self,thetas,weights,match):
@@ -279,7 +284,7 @@ class WeightedModel(GraphModel):
   def armijo(self, thetas,weights,Xi,steps,threshold=1e-4,direction=+1, optTol=1e-8,progTol=1e-8):
       import copy
       bounds = [0.0 for f in thetas]  # NOTE: assumes bounds already pulled out!
-      #print "Update pass for ",Xi
+      #print("Update pass for ",Xi)
       # TODO: return something if thetas is length 1?
       f0,f1 = None, sum(bounds)                                          # init prev, current objective values
       match = reduce(lambda a,b: a&b, [th.vars for th in thetas], thetas[0].vars) 
@@ -314,7 +319,7 @@ class WeightedModel(GraphModel):
           if Xi is not None and self._weights[Xi]!=0: WeightedModel.update_weights( newweights, idx, dW, step, direction );
           bounds2 = [PhiW(th,wt,self.priority) for th,wt in zip(newthetas,newweights)]
           f1 = sum(bounds2)
-          #print "  ",f0," => ",f1, "  (",f0-f1,' ~ ',step*threshold*L2,") ",(f0 - f1)*direction > step*threshold*L2
+          #print("  ",f0," => ",f1, "  (",f0-f1,' ~ ',step*threshold*L2,") ",(f0 - f1)*direction > step*threshold*L2)
           if (f0 - f1)*direction > step*threshold*L2:       # if armijo "enough improvement" satisfied
             for th,nth in zip(thetas,newthetas): np.copyto(th.t,nth.t)  # rewrite tables
             for j,wt,w2 in zip(idx,weights,newweights): wt[j] = w2[j];
@@ -331,7 +336,7 @@ class WeightedModel(GraphModel):
   def init(self):
     # TODO check if uninitialized and flag as initialized?
     bounds = [PhiW(f,self.fweights[f],self.priority) for f in self.factors]
-    #print bounds
+    #print(bounds)
     for j,f in enumerate(self.factors): f -= bounds[j]   # remove scalar bounding constant
     phi_w = sum(bounds)
     self.factors[0][0] += phi_w                             # and put it in the scalar factor
@@ -342,21 +347,21 @@ class WeightedModel(GraphModel):
     self.init()
     phi_w = self.factors[0][0]
     start_time = time.time()
-    if verbose: print "Iter 0: ", phi_w
-    for t in xrange(1,stopIter+1):               # for each iteration:
+    if verbose: print("Iter 0: ", phi_w)
+    for t in range(1,stopIter+1):                 # for each iteration:
         # Update each variable in turn:
         for Xi in self.elim_order:                # for each variable,  TODO: use elim order
             with_i = self.factorsWith(Xi)
             if len(with_i) <= 1: continue;
             weight_i = [self.fweights[th] for th in with_i]
-            #print weight_i
+            #print(weight_i)
             bounds = self.armijo(with_i,weight_i,Xi, 5, 0.01, 2*float(self.weights[Xi] >= 0.0)-1 )
             for f,bd in zip(with_i,bounds): f-=bd  # modify the factors to pull out bound
             self.factors[0][0] += sum(bounds)      # and store in constant term
         #
         # Update the upper bound, print, and check for convergence
         prev,phi_w = phi_w,self.factors[0][0]
-        if verbose: print "[{}] Iter {} : {}".format(time.time()-start_time,t,phi_w);
+        if verbose: print("[{}] Iter {} : {}".format(time.time()-start_time,t,phi_w))
         if abs(prev - phi_w) < stopTol: break
     return phi_w
 

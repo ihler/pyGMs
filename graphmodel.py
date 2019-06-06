@@ -128,13 +128,15 @@ class GraphModel(object):
         
   def makeMinimal(self):
     """Merge factors to make a minimal factor graph: retain only factors over maximal cliques"""
+    to_remove = []
     for f in self.factors:
       fs = self.factorsWithAll(f.vars)
       largest = fs[-1]
       if (fs[-1] != f):
         if self.isLog: largest += f
         else:          largest *= f
-        self.removeFactors([f])
+        to_remove.append(f)
+    self.removeFactors(to_remove)
 
 
   def factorsWith(self,v,copy=True):
@@ -237,7 +239,7 @@ class GraphModel(object):
     """Condition (clamp) the graphical model on a partial configuration (dict) {Xi:xi, Xj:xj, ...}"""
     # TODO: optionally, ensure re-added factor is maximal, or modify an existing one (fWithAll(vs)[-1]?)
     if len(evidence)==0: return
-    for v,x in evidence.iteritems():
+    for v,x in evidence.items():
       constant = 0.0
       for f in self.factorsWith(v):
         self.removeFactors([f])
@@ -401,14 +403,14 @@ class GraphModel(object):
     for i,f in enumerate(self.factors):
       for v1 in f.vars:
         G.add_edge(v1.label,-i-1)
-   
-    pos = nx.spring_layout(G)   # so we can use same positions multiple times...
+
+    if not kwargs.has_key('pos'): kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
     kwargs['var_labels']  = kwargs.get('var_labels',{n:n for n in vNodes})
     kwargs['labels'] = kwargs.get('var_labels',{})
-    nx.draw_networkx(G,pos, nodelist=vNodes,node_color=var_color,**kwargs)
+    nx.draw_networkx(G, nodelist=vNodes,node_color=var_color,**kwargs)
     kwargs['labels'] = kwargs.get('factor_labels',{})    # TODO: need to transform?
-    nx.draw_networkx_nodes(G,pos, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
-    nx.draw_networkx_edges(G,pos,**kwargs)
+    nx.draw_networkx_nodes(G, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
+    nx.draw_networkx_edges(G,**kwargs)
     return G
 
 
