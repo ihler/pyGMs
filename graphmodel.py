@@ -29,11 +29,12 @@ class GraphModel(object):
   """A basic graphical model class; represents a collection of factors.
 
   Example:
+
   >>> flist = readUai('myfile.uai')  # read a list of factors from a UAI format file
   >>> model = GraphModel(flist)      # makes a copy of the factors for manipulation
 
-  The model may be stored in an exponential, product of factors form:  f(X) = \prod_r f_r(X_r)
-  or in a log-probability, sum of factors form:  \theta(X) = \sum_r \theta_r(X_r)
+  The model may be stored in an exponential, product of factors form:  f(X) = \prod_r f_r(X_r),
+  or in a log-probability, sum of factors form:  \theta(X) = \sum_r \theta_r(X_r).
   
   Various accessor functions enable finding factors that depend on one or more variables, variables that
   share one or more factors (their Markov blanket), manipulations to the graph (such as eliminating one
@@ -164,16 +165,16 @@ class GraphModel(object):
     return vs
  
   def value(self,x,subset=None):
-    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x
-         if optional subset != None, uses *only* the factors in the Markov blanket of subset
+    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x.
+         If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
     factors = self.factors if subset==None else self.factorsWithAny(subset)
     if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in factors ] ) )
     else:          return np.product( [ f.valueMap(x) for f in factors ] )
 
   def logValue(self,x,subset=None): 
-    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x
-         if optional subset != None, uses *only* the factors in the Markov blanket of subset
+    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x.
+         If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
     factors = self.factors if subset==None else self.factorsWithAny(subset)
     if self.isLog: return sum( [ f.valueMap(x) for f in factors ] ) 
@@ -267,7 +268,7 @@ class GraphModel(object):
     Args:
       elimVars (iterable): list of variables to eliminate (in order of elimination)
       elimOp (str or lambda-fn): function to eliminate variable v from factor F; 'max', 'min', 'sum', 'lse',
-          or a user-defined custom function, e.g., 'lambda F,v: ...'
+      or a user-defined custom function, e.g., 'lambda F,v: ...'
     """
     if isinstance(elimVars,Var)|isinstance(elimVars,int): elimVars = [elimVars]   # check for single-var case
     if type(elimOp) is str:    # Basic elimination operators can be specified by a string
@@ -374,7 +375,7 @@ class GraphModel(object):
         for v2 in f.vars:
           if (v1 != v2): G.add_edge(v1.label,v2.label)
     kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in G.nodes()})
-    kwargs['labels'] = kwargs.get('var_labels',{})
+    kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
     nx.draw(G,**kwargs)
     return G
 
@@ -404,7 +405,7 @@ class GraphModel(object):
       for v1 in f.vars:
         G.add_edge(v1.label,-i-1)
 
-    if not kwargs.has_key('pos'): kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
+    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
     kwargs['var_labels']  = kwargs.get('var_labels',{n:n for n in vNodes})
     kwargs['labels'] = kwargs.get('var_labels',{})
     nx.draw_networkx(G, nodelist=vNodes,node_color=var_color,**kwargs)
@@ -412,6 +413,80 @@ class GraphModel(object):
     nx.draw_networkx_nodes(G, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
     nx.draw_networkx_edges(G,**kwargs)
     return G
+
+
+
+  def drawBayesNet(self,**kwargs):
+    """Draw a Bayesian Network (directed acyclic graph) using networkx function calls
+
+    Args:
+      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
+
+    Example:
+    >>> model.drawBayesNet( labels={0:'0', ... } )    # keyword args passed to networkx.draw()
+    """
+    import networkx as nx
+    topo_order = bnOrder(self)                              # TODO: allow user-provided order?
+    if topo_order is None: raise ValueError('Topo order not found; graph is not a Bayes Net?')
+    pri = np.zeros((len(topo_order),))-1
+    pri[topo_order] = np.arange(len(topo_order))
+    G = nx.DiGraph()
+    G.add_nodes_from( [v.label for v in self.X if v.states > 1] )  # only non-trivial vars
+    for f in self.factors:
+      v2label = topo_order[ int(max(pri[v.label] for v in f.vars)) ]
+      for v1 in f.vars:
+        if (v1.label != v2label): G.add_edge(v1.label,v2label)
+
+    kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in [v.label for v in self.X]})
+    kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
+    kwargs['arrowstyle'] = kwargs.get('arrowstyle','->')
+    kwargs['arrowsize'] = kwargs.get('arrowsize',10)
+    nx.draw(G,**kwargs)
+    return G
+
+
+  def drawLimid(self, C,D,U, **kwargs):
+    """Draw a limited-memory influence diagram (limid) using networkx 
+
+    Args:
+      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
+
+    Example:
+    >>> model.drawLimid(C,D,U, var_labels={0:'0', ... } )    # keyword args passed to networkx.draw()
+    """
+    import networkx as nx
+    decisions = [d[-1] for d in D]                       # list the decision variables
+    model = GraphModel( C + [Factor(d,1.) for d in D] )  # get all chance & decision vars, arcs
+    chance = [c for c in model.X if c not in decisions]
+    util = [-i-1 for i,u in enumerate(U)]
+    cpd_edges, util_edges, info_edges = [],[],[]
+    topo_order = bnOrder(model)                          
+    if topo_order is None: raise ValueError('Topo order not found; graph is not a Bayes Net?')
+    pri = np.zeros((len(topo_order),))-1
+    pri[topo_order] = np.arange(len(topo_order))
+    G = nx.DiGraph()
+    G.add_nodes_from( [v.label for v in self.X if v.states > 1] )  # only non-trivial vars
+    G.add_nodes_from( util )                                       # add utility nodes
+    for f in model.factors:
+      v2label = topo_order[ int(max(pri[v.label] for v in f.vars)) ]
+      for v1 in f.vars:
+        if (v1.label != v2label): 
+          G.add_edge(v1.label,v2label)
+          if v2label in decisions: info_edges.append((v1.label,v2label))
+          else: cpd_edges.append((v1.label,v2label))
+    for i,u in enumerate(U):
+      for v1 in u.vars:
+        G.add_edge(v1.label,-i-1)
+        util_edges.append( (v1.label,-i-1) )
+    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
+    nx.draw_networkx_nodes(G, nodelist=decisions, node_color=(.7,.7,.9), node_shape='s', **kwargs)
+    nx.draw_networkx_nodes(G, nodelist=chance, node_color=(1.,1.,1.), node_shape='o', **kwargs)
+    nx.draw_networkx_nodes(G, nodelist=util, node_color=(.7,.9,.7), node_shape='d', **kwargs)
+    nx.draw_networkx_edges(G, edgelist=cpd_edges+util_edges, **kwargs)
+    tmp = nx.draw_networkx_edges(G, edgelist=info_edges, **kwargs)
+    for line in tmp: line.set_linestyle('dashed')
+    nx.draw_networkx_labels(G, **kwargs)
+
 
 
 #  def nxFactorGraph(self):
@@ -806,44 +881,6 @@ def sampleSequential(model, varOrder, factorOrder=None):
   return s_list, lnP   # TODO: backwards?
    
 
-
-
-################################################################################################
-# "Vectorize" the model parameters (log factor values), in overcomplete exponential family form.
-# "features" is a set of base factors used to determine the size & arrangement of the vector
-# "factors" are the model factors to conver to the vector representation
-# "theta" is the resulting log-vector
-
-# TODO: update to accept either a factor list or a graphical model
-# TODO: update to check for isLog flag
-
-def vectorize(factors, features, default=0.0):
-  """Return a vectorization of the model with "factors", under the specified set of base features"""
-  # TODO: better documentation
-  model = GraphModel(features, copy=False)  # create model with references to feature factors
-  idx = {};
-  t = 0;
-  for u in model.factors:
-    idx[u] = slice(t,t+u.numel());  # save location of this factor's features in the full vector
-    t += u.numel()
-  theta = np.zeros((t,))+default;           # allocate storage for vectorization
-  for f in factors:
-    u = model.factorsWithAll(f.vars)[0]; # get smallest feature set that can contain this factor
-    theta[idx[u]] += f.log().table.ravel(order=orderMethod);   # and add the factor to it
-  return theta
-
-def devectorize(theta, features, default=0.0, tolerance=0.0):
-  """Return a vectorization of the model with "factors", under the specified set of base features"""
-  t = 0;
-  factors = []
-  for u in features:
-    fnext = Factor(u.vars, theta[t:t+u.numel()]);
-    t += u.numel();
-    if (fnext-default).abs().sum() > tolerance:   # if any entries are different from the default,
-      factors.append( fnext.expIP() );            #   add them as factors  (exp?)
-  return factors
-
-################################################################################################
 
 
 

@@ -1,0 +1,221 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM: CSPs &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="pyGM: Miscellaneous" href="misc.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-pyGM.csp">
+<span id="pygm-csps"></span><h1>pyGM: CSPs<a class="headerlink" href="#module-pyGM.csp" title="Permalink to this headline">¶</a></h1>
+<dl class="function">
+<dt id="pyGM.csp.OK">
+<code class="descclassname">pyGM.csp.</code><code class="descname">OK</code><span class="sig-paren">(</span><em>factors</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#OK"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.OK" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return 0 if constraints already violated; 1 otherwise</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyGM.csp.PriorityQueue">
+<em class="property">class </em><code class="descclassname">pyGM.csp.</code><code class="descname">PriorityQueue</code><a class="reference internal" href="_modules/pyGM/csp.html#PriorityQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.PriorityQueue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Priority queue wrapper; returns highest priority element.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.arcConsistent">
+<code class="descclassname">pyGM.csp.</code><code class="descname">arcConsistent</code><span class="sig-paren">(</span><em>csp</em>, <em>updated=None</em>, <em>nvalid=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#arcConsistent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.arcConsistent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update csp to arc consistency, from changes to updated (default: all)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.astar">
+<code class="descclassname">pyGM.csp.</code><code class="descname">astar</code><span class="sig-paren">(</span><em>model</em>, <em>order</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#astar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.astar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Basic A-star search for graphical model ‘model’ using search order ‘order’.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.backtrack">
+<code class="descclassname">pyGM.csp.</code><code class="descname">backtrack</code><span class="sig-paren">(</span><em>model</em>, <em>order</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#backtrack"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.backtrack" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backtracking search for CSPs.  Use GraphModel container of constraint factors and search order ‘order’.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.backtrackRecurse">
+<code class="descclassname">pyGM.csp.</code><code class="descname">backtrackRecurse</code><span class="sig-paren">(</span><em>csp</em>, <em>assign</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#backtrackRecurse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.backtrackRecurse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Internal recursive function for backtracking search on CSP given partial assignment</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.backtrackingSearch">
+<code class="descclassname">pyGM.csp.</code><code class="descname">backtrackingSearch</code><span class="sig-paren">(</span><em>constraints</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#backtrackingSearch"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.backtrackingSearch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backtracking search for list of constraint satisfaction factors.
+Returns a solution if one exists; None otherwise.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.backtrackingSearch2">
+<code class="descclassname">pyGM.csp.</code><code class="descname">backtrackingSearch2</code><span class="sig-paren">(</span><em>constraints</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#backtrackingSearch2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.backtrackingSearch2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backtracking search for list of constraint satisfaction factors.
+Returns a solution if one exists; None otherwise.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.condition">
+<code class="descclassname">pyGM.csp.</code><code class="descname">condition</code><span class="sig-paren">(</span><em>csp</em>, <em>Xi</em>, <em>xi</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#condition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.condition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make a copy of the CSP, then assert Xi=xi in that copy &amp; return it</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.consistent">
+<code class="descclassname">pyGM.csp.</code><code class="descname">consistent</code><span class="sig-paren">(</span><em>csp</em>, <em>assign</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#consistent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.consistent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return False if CSP known inconsistent; True otherwise.
+Note: assumes that “assign” has already been incorporated into the CSP</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.generate3SAT">
+<code class="descclassname">pyGM.csp.</code><code class="descname">generate3SAT</code><span class="sig-paren">(</span><em>alpha</em>, <em>n</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#generate3SAT"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.generate3SAT" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate factors corresponding to a random 3-SAT problem with n variables and alpha*n CNF clauses</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.hillClimbing">
+<code class="descclassname">pyGM.csp.</code><code class="descname">hillClimbing</code><span class="sig-paren">(</span><em>X</em>, <em>objectiveFn</em>, <em>xInit=None</em>, <em>maxSteps=100</em>, <em>maxValue=inf</em>, <em>verbose=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#hillClimbing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.hillClimbing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Basic greedy hill-climbing local search over configurations</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.hillClimbing2">
+<code class="descclassname">pyGM.csp.</code><code class="descname">hillClimbing2</code><span class="sig-paren">(</span><em>X</em>, <em>objectiveFn</em>, <em>xInit=None</em>, <em>maxSteps=100</em>, <em>maxValue=inf</em>, <em>verbose=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#hillClimbing2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.hillClimbing2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Hill climbing local search, but with random walk on plateaus</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.inference">
+<code class="descclassname">pyGM.csp.</code><code class="descname">inference</code><span class="sig-paren">(</span><em>csp</em>, <em>Xi</em>, <em>xi</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#inference"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.inference" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the CSP after setting Xi=xi, to reduce other variable domains if desired</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.minConflicts">
+<code class="descclassname">pyGM.csp.</code><code class="descname">minConflicts</code><span class="sig-paren">(</span><em>model</em>, <em>maxSteps=100</em>, <em>verbose=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#minConflicts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.minConflicts" title="Permalink to this definition">¶</a></dt>
+<dd><p>Minimum conflicts local search for CSPs</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.nViolated">
+<code class="descclassname">pyGM.csp.</code><code class="descname">nViolated</code><span class="sig-paren">(</span><em>factors</em>, <em>x</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#nViolated"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.nViolated" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate the number of violated constraints in a set of 0/1 factors</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.orderDomainValues">
+<code class="descclassname">pyGM.csp.</code><code class="descname">orderDomainValues</code><span class="sig-paren">(</span><em>csp</em>, <em>Xi</em>, <em>assign</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#orderDomainValues"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.orderDomainValues" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a sequence of values to test for Xi in CSP with current assignment</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.csp.selectUnassignedVar">
+<code class="descclassname">pyGM.csp.</code><code class="descname">selectUnassignedVar</code><span class="sig-paren">(</span><em>csp</em>, <em>assign</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/csp.html#selectUnassignedVar"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.csp.selectUnassignedVar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the next variable to assign, given the CSP and current assignment</p>
+</dd></dl>
+
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellaneous</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="misc.html" title="previous chapter">pyGM: Miscellaneous</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/csp.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

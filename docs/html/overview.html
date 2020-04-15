@@ -1,0 +1,413 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM: Factors Overview &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyGM: Factor Objects" href="factor.html" />
+    <link rel="prev" title="pyGM: Python Graphical Models" href="index.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="pygm-factors-overview">
+<h1>pyGM: Factors Overview<a class="headerlink" href="#pygm-factors-overview" title="Permalink to this headline">¶</a></h1>
+<p>For more details, see <code class="xref py py-class docutils literal notranslate"><span class="pre">pyGM.Factor</span></code></p>
+<p>Factors are the basic building block of our graphical model representations. In
+general, a factor consists of a set of variables (its “scope”), and the
+function values f(x) for each joint configuration x (a tuple of values) of
+its variables.
+Factors support basic operations common in probabilistic inference, including
+artihmetic operations, marginalization, optimization, and sampling.</p>
+<div class="section" id="basics">
+<h2>Basics<a class="headerlink" href="#basics" title="Permalink to this headline">¶</a></h2>
+<p>We can create a basic factor object by specifying its variables and a table of
+values. The table size also specifies the cardinality of each variable; here
+<img class="math" src="_images/math/991807dfa2ae9914c3a50050b40f1a852206f92d.png" alt="X_0"/> has three values <img class="math" src="_images/math/24aba13b796ccf4f348bbb6dec10de12a97a9ba6.png" alt="\{0,1,2\}"/> and <img class="math" src="_images/math/08fe31609cd48800a8b44af61f352242fc327578.png" alt="X_1"/> has two, <img class="math" src="_images/math/5406206b9be7cc8c738257bb81b184ae9efb9c5f.png" alt="\{0,1\}"/>.
+Internally, discrete variables always take on numeric values starting at zero. If you wish
+to associate these values with other symbols, you must define a mapping yourself.
+Similarly, internally discrete variables are associated with a non-negative “id number”
+(<img class="math" src="_images/math/991807dfa2ae9914c3a50050b40f1a852206f92d.png" alt="X_0"/>, <img class="math" src="_images/math/08fe31609cd48800a8b44af61f352242fc327578.png" alt="X_1"/>, etc.); you may assign these variables to other names in your code, but
+only their id number is necessary to refer to them.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">pyGM</span> <span class="kn">as</span> <span class="nn">gm</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">X0</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">Var</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>    <span class="c1"># Define variable &quot;X0&quot; taking 3 states</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">X1</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">Var</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>    <span class="c1"># Define variable &quot;X1&quot; taking 2 states</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">F</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">Factor</span><span class="p">([</span><span class="n">X0</span><span class="p">,</span><span class="n">X1</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>From the Factor class, you can access the variables over which it is defined (its scope),
+their sizes, the full table of values, or the value of the function at some configuration
+of its arguments:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="o">.</span><span class="n">vars</span>           <span class="c1"># variables in the factor&#39;s arguments</span>
+<span class="go">{0,1}</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="o">.</span><span class="n">dims</span><span class="p">()</span>         <span class="c1"># the dimensions / # of states of each variable</span>
+<span class="go">(3, 2)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="o">.</span><span class="n">table</span>          <span class="c1"># table representation uses numpy arrays</span>
+<span class="go">array([[0.55538171, 0.7854848 ],</span>
+<span class="go">       [0.29212683, 0.60789923],</span>
+<span class="go">       [0.48685444, 0.24967191]])</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>           <span class="c1"># check F(X0=2, X1=0)</span>
+<span class="go">&#39;0.486854436651706&#39;</span>
+</pre></div>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p>Factors store their arguments in sorted order according to their id numbers,
+<strong>not</strong> the order in which the variables appear when the factor is created.
+Thus, to avoid confusion you should be careful when defining and accessing factors to try
+to do so in id-number order.
+If you need to access values without knowing the id number ordering, you can use “valueMap”
+and “setValueMap”:</p>
+<div class="last highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="o">.</span><span class="n">valueMap</span><span class="p">(</span> <span class="p">{</span><span class="n">X1</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span> <span class="n">X0</span><span class="p">:</span><span class="mi">2</span><span class="p">}</span> <span class="p">)</span>           <span class="c1"># check entry value</span>
+<span class="go">&#39;0.486854436651706&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="o">.</span><span class="n">setValueMap</span><span class="p">(</span> <span class="p">{</span><span class="n">X1</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span> <span class="n">X0</span><span class="p">:</span><span class="mi">2</span><span class="p">},</span> <span class="mf">0.5</span> <span class="p">)</span>   <span class="c1"># set entry to 0.5</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="constructor-accessors">
+<h2>Constructor &amp; Accessors<a class="headerlink" href="#constructor-accessors" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="28%" />
+<col width="72%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.__init__" title="pyGM.Factor.__init__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__init__()</span></code></a></td>
+<td>Constructor</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.vars" title="pyGM.Factor.vars"><code class="xref py py-attr docutils literal notranslate"><span class="pre">vars</span></code></a></td>
+<td>Get the list of arguments for F (property)</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.table" title="pyGM.Factor.table"><code class="xref py py-attr docutils literal notranslate"><span class="pre">table</span></code></a></td>
+<td>Get the table of values for F (property)</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.nvar" title="pyGM.Factor.nvar"><code class="xref py py-attr docutils literal notranslate"><span class="pre">nvar</span></code></a></td>
+<td>Number of arguments (property)</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.numel" title="pyGM.Factor.numel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">numel()</span></code></a></td>
+<td>Number of elements in the table specification of F</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.dims" title="pyGM.Factor.dims"><code class="xref py py-meth docutils literal notranslate"><span class="pre">dims()</span></code></a></td>
+<td>The dimensions (number of states) of the argument variables</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.__str__" title="pyGM.Factor.__str__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__str__()</span></code></a></td>
+<td>A basic string representation, “Factor( {ids} )”</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.__repr__" title="pyGM.Factor.__repr__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__repr__()</span></code></a></td>
+<td>A string representation that including pointer information on the numpy table</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="arithmetic-functions">
+<h2>Arithmetic Functions<a class="headerlink" href="#arithmetic-functions" title="Permalink to this headline">¶</a></h2>
+<p>Basic arithmetic (e.g., plus) is defined to produce a factor equivalent to the
+operator applied to the argument functions. If both factors have the same
+variables (arguments), the operation is elementwise; if they have different
+scopes, the operations produce a new function defined over their joint scope:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">F</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">Factor</span><span class="p">([</span><span class="n">X0</span><span class="p">],[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">G</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">Factor</span><span class="p">([</span><span class="n">X1</span><span class="p">],[</span><span class="mi">1</span><span class="p">,</span><span class="mi">5</span><span class="p">])</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">F</span><span class="o">+</span><span class="n">G</span>
+<span class="go">Factor({0,1},[0x1b999c0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">(</span><span class="n">F</span><span class="o">+</span><span class="n">G</span><span class="p">)</span><span class="o">.</span><span class="n">table</span>
+<span class="go">array([[1., 5.],</span>
+<span class="go">       [2., 6.],</span>
+<span class="go">       [3., 7.]])</span>
+</pre></div>
+</div>
+<table border="1" class="docutils">
+<colgroup>
+<col width="28%" />
+<col width="72%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.__add__" title="pyGM.Factor.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a></td>
+<td>Addition, F+G</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.__sub__" title="pyGM.Factor.__sub__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__sub__()</span></code></a></td>
+<td>Subtraction, F-G</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.__mul__" title="pyGM.Factor.__mul__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__mul__()</span></code></a></td>
+<td>Multiplication, F*G</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.__div__" title="pyGM.Factor.__div__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__div__()</span></code></a></td>
+<td>Division, F/G</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.__pow__" title="pyGM.Factor.__pow__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__pow__()</span></code></a></td>
+<td>Raise each element of F to a (scalar) power p, F**p</td>
+</tr>
+</tbody>
+</table>
+<p>Arithmetic operators also have in-place versions (“+=”, “-=”, etc.) that replace the
+left-hand-side factor with the result.</p>
+<p>A number of unary arithmetic operations are also defined:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="25%" />
+<col width="75%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.__abs__" title="pyGM.Factor.__abs__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__abs__()</span></code></a></td>
+<td>Return a factor whose elements are the absolute value of those in F, <img class="math" src="_images/math/128f4170e59c41cd796aefd72ed9e78260637d3b.png" alt="G(x)=|F(x)|"/></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.__neg__" title="pyGM.Factor.__neg__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__neg__()</span></code></a></td>
+<td>Return a factor whose elements are the negation of those in F, <img class="math" src="_images/math/1e1872c844d86bcb0c58c3543c67ccfdbc441791.png" alt="G(x)=-F(x)"/></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.exp" title="pyGM.Factor.exp"><code class="xref py py-meth docutils literal notranslate"><span class="pre">exp()</span></code></a></td>
+<td>Return a factor whose elements are exponential of F, <img class="math" src="_images/math/90ab569908b98eb751e5912001c3873b3ab7c9c5.png" alt="G(x) = \exp(F(x))"/></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.log" title="pyGM.Factor.log"><code class="xref py py-meth docutils literal notranslate"><span class="pre">log()</span></code></a></td>
+<td>Natural logarithm, <img class="math" src="_images/math/62c67e531282c902943e7b6817ad4004f076e70b.png" alt="G(x) = \log(F(x))"/></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.log10" title="pyGM.Factor.log10"><code class="xref py py-meth docutils literal notranslate"><span class="pre">log10()</span></code></a></td>
+<td>Base-10 logarithm</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.log2" title="pyGM.Factor.log2"><code class="xref py py-meth docutils literal notranslate"><span class="pre">log2()</span></code></a></td>
+<td>Base-2 logarithm</td>
+</tr>
+</tbody>
+</table>
+<p>Some unary operators also have in-place versions:
+<a class="reference internal" href="factor.html#pyGM.Factor.absIP" title="pyGM.Factor.absIP"><code class="xref py py-meth docutils literal notranslate"><span class="pre">absIP()</span></code></a>,
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">negIP()</span></code>,
+<a class="reference internal" href="factor.html#pyGM.Factor.expIP" title="pyGM.Factor.expIP"><code class="xref py py-meth docutils literal notranslate"><span class="pre">expIP()</span></code></a>,
+<a class="reference internal" href="factor.html#pyGM.Factor.logIP" title="pyGM.Factor.logIP"><code class="xref py py-meth docutils literal notranslate"><span class="pre">logIP()</span></code></a>,
+<a class="reference internal" href="factor.html#pyGM.Factor.log10IP" title="pyGM.Factor.log10IP"><code class="xref py py-meth docutils literal notranslate"><span class="pre">log10IP()</span></code></a>, and
+<a class="reference internal" href="factor.html#pyGM.Factor.log2IP" title="pyGM.Factor.log2IP"><code class="xref py py-meth docutils literal notranslate"><span class="pre">log2IP()</span></code></a></p>
+</div>
+<div class="section" id="elimination-operators">
+<h2>Elimination Operators<a class="headerlink" href="#elimination-operators" title="Permalink to this headline">¶</a></h2>
+<p>The most useful aspect of the factor class is to automate the tedious
+computations underlying many of the mathematical operators common in
+probabilistic graphical models. These include basic variable elimination
+operators, specifying the variables to be eliminated:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="24%" />
+<col width="76%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.sum" title="pyGM.Factor.sum"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sum()</span></code></a></td>
+<td>Sum over the values of F over one or more variables, e.g., <img class="math" src="_images/math/6fee29e7971c7205c039ae169adf7eeb67b2e93b.png" alt="G(X_1)=\sum_{x_2}F(X_1,x_2)"/></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.max" title="pyGM.Factor.max"><code class="xref py py-meth docutils literal notranslate"><span class="pre">max()</span></code></a></td>
+<td>Find the maximum value of F over one or more variables, e.g., <img class="math" src="_images/math/e96d218bcd80533ec9f6897d5a67a0585ac143c9.png" alt="G(X_1)=\max_{x_2}F(X_1,x_2)"/></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.min" title="pyGM.Factor.min"><code class="xref py py-meth docutils literal notranslate"><span class="pre">min()</span></code></a></td>
+<td>Find the minimum value of F over one or more variables</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.lse" title="pyGM.Factor.lse"><code class="xref py py-meth docutils literal notranslate"><span class="pre">lse()</span></code></a></td>
+<td>Log-sum-exp elimination operator, <img class="math" src="_images/math/8eaab0cd58bed7471b75c73a67eaf1495d436b48.png" alt="G(X_1)=\log \sum_{x_2} \exp(F(X_1,x_2))"/></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.sumPower" title="pyGM.Factor.sumPower"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sumPower()</span></code></a></td>
+<td>Power summation, <img class="math" src="_images/math/a5d304782be72b990bda094c11855d458a777e96.png" alt="G(X_1)=\Big(\sum_{x_2}\big(F(X_1,x_2)\big)^{p}\Big)^{\frac{1}{p}}"/></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.lsePower" title="pyGM.Factor.lsePower"><code class="xref py py-meth docutils literal notranslate"><span class="pre">lsePower()</span></code></a></td>
+<td>Log-powersum-exp elimination</td>
+</tr>
+</tbody>
+</table>
+<p>The closely related functions
+<a class="reference internal" href="factor.html#pyGM.Factor.marginal" title="pyGM.Factor.marginal"><code class="xref py py-meth docutils literal notranslate"><span class="pre">marginal()</span></code></a>, <a class="reference internal" href="factor.html#pyGM.Factor.maxmarginal" title="pyGM.Factor.maxmarginal"><code class="xref py py-meth docutils literal notranslate"><span class="pre">maxmarginal()</span></code></a>, and <a class="reference internal" href="factor.html#pyGM.Factor.minmarginal" title="pyGM.Factor.minmarginal"><code class="xref py py-meth docutils literal notranslate"><span class="pre">minmarginal()</span></code></a>
+eliminate all variables in the factor <em>except</em> those specified, to produce (unnormalized)
+marginal functions.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="21%" />
+<col width="79%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.condition" title="pyGM.Factor.condition"><code class="xref py py-meth docutils literal notranslate"><span class="pre">condition()</span></code></a></td>
+<td>Extract the subtable of F corresponding to an assignment to some of F’s args, e.g., <img class="math" src="_images/math/d2f5966227b90c3e0ab4aa22c78227ce8e2d8ac2.png" alt="G(X_1)=F(X_1,X_2=x_2)"/></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.argmax" title="pyGM.Factor.argmax"><code class="xref py py-meth docutils literal notranslate"><span class="pre">argmax()</span></code></a></td>
+<td>Find the configuration of arguments corresponding to F’s maximum value</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.argmin" title="pyGM.Factor.argmin"><code class="xref py py-meth docutils literal notranslate"><span class="pre">argmin()</span></code></a></td>
+<td>Find the configuration of arguments corresponding to F’s minimum value</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.sample" title="pyGM.Factor.sample"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sample()</span></code></a></td>
+<td>Draw a configuration of args at random according to F as a probability measure</td>
+</tr>
+</tbody>
+</table>
+<p>See also the related <a class="reference internal" href="factor.html#pyGM.Factor.condition2" title="pyGM.Factor.condition2"><code class="xref py py-meth docutils literal notranslate"><span class="pre">condition2()</span></code></a>, <a class="reference internal" href="factor.html#pyGM.Factor.argmax2" title="pyGM.Factor.argmax2"><code class="xref py py-meth docutils literal notranslate"><span class="pre">argmax2()</span></code></a>, <a class="reference internal" href="factor.html#pyGM.Factor.argmin2" title="pyGM.Factor.argmin2"><code class="xref py py-meth docutils literal notranslate"><span class="pre">argmin2()</span></code></a>, which are similar but take differently
+formatted function arguments.</p>
+</div>
+<div class="section" id="boolean-tests">
+<h2>Boolean Tests<a class="headerlink" href="#boolean-tests" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="28%" />
+<col width="72%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.isfinite" title="pyGM.Factor.isfinite"><code class="xref py py-meth docutils literal notranslate"><span class="pre">isfinite()</span></code></a></td>
+<td>True if F contains only finite values (no inf, -inf, nan)</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.isnan" title="pyGM.Factor.isnan"><code class="xref py py-meth docutils literal notranslate"><span class="pre">isnan()</span></code></a></td>
+<td>True if F contains any not-a-number (nan) values</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.isAny" title="pyGM.Factor.isAny"><code class="xref py py-meth docutils literal notranslate"><span class="pre">isAny()</span></code></a></td>
+<td>Helper function for arbitrary elementwise boolean tests on F</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="other-operations">
+<h2>Other Operations<a class="headerlink" href="#other-operations" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="28%" />
+<col width="72%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Method</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="factor.html#pyGM.Factor.entropy" title="pyGM.Factor.entropy"><code class="xref py py-meth docutils literal notranslate"><span class="pre">entropy()</span></code></a></td>
+<td>Evaluate the Shannon entropy of F, interpreted as a probability measure</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="factor.html#pyGM.Factor.distance" title="pyGM.Factor.distance"><code class="xref py py-meth docutils literal notranslate"><span class="pre">distance()</span></code></a></td>
+<td>Evaluate any of several distances or pseudo-distances between two factors F, G</td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellaneous</a></li>
+<li class="toctree-l1"><a class="reference internal" href="csp.html">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">pyGM: Python Graphical Models</a></li>
+      <li>Next: <a href="factor.html" title="next chapter">pyGM: Factor Objects</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/overview.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

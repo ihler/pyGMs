@@ -130,6 +130,34 @@ class WMB(object):
             to_return += "\n"
         return to_return
 
+#    def draw(self):
+#        import pygraphviz
+#        G = pygraphviz.AGraph()
+#        for i,b in enumerate(self.buckets):
+#            for j,mb in enumerate(b):
+#                G.add_node(self.__nodeID(mb))
+#        for i,b in enumerate(self.buckets):
+#            for j,mb in enumerate(b):
+#                G.add_edge(self.__nodeID(mb),self.__nodeID(mb.parent))
+#        G.layout()        # layout with default (neato)
+#        G.draw('wmb.png') # draw png
+
+    def draw(self):
+        import networkx as nx
+        pos,labels = {},{}
+        G = nx.DiGraph()
+        for i,b in enumerate(self.buckets):
+            for j,mb in enumerate(b):
+                G.add_node(str(mb))
+                pos[str(mb)] = (j,-i)
+                labels[str(mb)] = str(mb)
+        for i,b in enumerate(self.buckets):
+            for j,mb in enumerate(b):
+                if mb.parent is not None: G.add_edge(str(mb),str(mb.parent))
+        nx.draw(G, pos=pos, labels=labels)
+        return G
+
+
 
     def addClique(self,vars):
         """Add a clique with scope "vars", fixing up structure to be a valid MB tree"""
@@ -196,6 +224,7 @@ class WMB(object):
             for mb in b:
                 mb.theta = Factor([],0.)
                 for f in mb.originals: mb.theta += f.log()
+    # TODO: check if already in log form???
 
     def memory(self, bucket=None, use_backward=True):
         """Compute the total memory (in MB) required for this mini-bucket approximation"""
@@ -207,13 +236,15 @@ class WMB(object):
                 # TODO: add forward & backward message costs here also
         return mem / 1024. / 1024.
 
-
-    def scoreByScope(ibound=None, sbound=None):
+    # TODO: convert to external function?  pass variable in; check if refinement of another?
+    #  Is score correct, or inverted?  check
+    def scoreByScope(self, ibound=None, sbound=None):
       """Returns a scope-based scoring function for use in merge()"""
       def score(m1,m2):
         jt = m1.clique | m2.clique
         if ibound is not None and len(jt) > ibound: return -1
         if sbound is not None and jt.nrStates() > sbound: return -1
+        # TODO: also disallow if not consistent with some specified scope sets?
         mx,mn = max([len(m1.clique),len(m2.clique)]), min([len(m1.clique),len(m2.clique)])
         return 1.0/(float(mx)+float(mn)/mx)
       # return the scoring function 
@@ -223,8 +254,11 @@ class WMB(object):
     # score = len(max)+len(min)/len(max) if union < iBound else -1 for scope
     def merge(self, score):
         from heapq import heappush,heappop
-        from itertools import count
-        tiebreak = count().__next__        # need tiebreaker value for priority queue (?)
+        try:
+          from itertools import count
+          tiebreak = count().__next__        # need tiebreaker value for priority queue (?)
+        except:
+          tiebreak = lambda: 0
         for b in self.buckets:
             priority = [] 
             lookup = {}

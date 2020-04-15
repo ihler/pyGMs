@@ -12,7 +12,10 @@ import numpy as np;
 from sortedcontainers import SortedSet as sset;
 
 from .factor import *
+#from .factorSparse import *
 from .graphmodel import *
 from .filetypes import *
+from .misc import *
+from .draw import *
 
 

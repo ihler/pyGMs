@@ -1,0 +1,14 @@
+
+pyGM: Miscellaneous
+=================================
+
+.. automodule:: pyGM.misc
+   :members:
+
+
+
+* :ref:`genindex`
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

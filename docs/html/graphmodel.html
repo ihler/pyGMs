@@ -1,0 +1,349 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM: Graphical Models &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyGM: File Input/Output" href="filetypes.html" />
+    <link rel="prev" title="pyGM: Factor Objects" href="factor.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="pygm-graphical-models">
+<h1>pyGM: Graphical Models<a class="headerlink" href="#pygm-graphical-models" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="pyGM.GraphModel">
+<em class="property">class </em><code class="descclassname">pyGM.</code><code class="descname">GraphModel</code><span class="sig-paren">(</span><em>factorList=None</em>, <em>copy=True</em>, <em>isLog=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>A basic graphical model class; represents a collection of factors.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">flist</span> <span class="o">=</span> <span class="n">readUai</span><span class="p">(</span><span class="s1">&#39;myfile.uai&#39;</span><span class="p">)</span>  <span class="c1"># read a list of factors from a UAI format file</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">GraphModel</span><span class="p">(</span><span class="n">flist</span><span class="p">)</span>      <span class="c1"># makes a copy of the factors for manipulation</span>
+</pre></div>
+</div>
+<p>The model may be stored in an exponential, product of factors form:  f(X) = prod_r f_r(X_r),
+or in a log-probability, sum of factors form:         heta(X) = sum_r        heta_r(X_r).</p>
+<p>Various accessor functions enable finding factors that depend on one or more variables, variables that
+share one or more factors (their Markov blanket), manipulations to the graph (such as eliminating one
+or more variables), and visualization (through networkx).</p>
+<dl class="method">
+<dt id="pyGM.GraphModel.addFactors">
+<code class="descname">addFactors</code><span class="sig-paren">(</span><em>flist</em>, <em>copy=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.addFactors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.addFactors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a list of factors to the model; factors are copied locally unless copy = False</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.condition">
+<code class="descname">condition</code><span class="sig-paren">(</span><em>evidence</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.condition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.condition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Condition (clamp) the graphical model on a partial configuration (dict) {Xi:xi, Xj:xj, …}</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.condition2">
+<code class="descname">condition2</code><span class="sig-paren">(</span><em>vs</em>, <em>xs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.condition2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.condition2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Condition (clamp) the graphical model on the partial configuration vs=xs (may be lists or tuples)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.connectedComponents">
+<code class="descname">connectedComponents</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.connectedComponents"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.connectedComponents" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the connected components of the model’s Markov graph.  Returns a list of sets of variables.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.copy">
+<code class="descname">copy</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.copy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.copy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a (deep) copy of the graphical model</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.drawBayesNet">
+<code class="descname">drawBayesNet</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.drawBayesNet"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.drawBayesNet" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draw a Bayesian Network (directed acyclic graph) using networkx function calls</p>
+<dl class="docutils">
+<dt>Args:</dt><dd><code class="docutils literal notranslate"><span class="pre">**kwargs</span></code>: remaining keyword arguments passed to networkx.draw()</dd>
+</dl>
+<p>Example:
+&gt;&gt;&gt; model.drawBayesNet( labels={0:‘0’, … } )    # keyword args passed to networkx.draw()</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.drawFactorGraph">
+<code class="descname">drawFactorGraph</code><span class="sig-paren">(</span><em>var_color='w'</em>, <em>factor_color=(0.2</em>, <em>0.2</em>, <em>0.8)</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.drawFactorGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.drawFactorGraph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draw a factorgraph using networkx function calls</p>
+<dl class="docutils">
+<dt>Args:</dt><dd>var_color (str, tuple): networkx color descriptor for drawing variable nodes
+factor_color (str, tuple): networkx color for drawing factor nodes
+var_labels (dict): variable id to label string for variable nodes
+factor_labels (dict): factor id to label string for factor nodes
+<code class="docutils literal notranslate"><span class="pre">**kwargs</span></code>: remaining keyword arguments passed to networkx.draw()</dd>
+</dl>
+<p>Example:
+&gt;&gt;&gt; model.drawFactorGraph( var_labels={0:‘0’, … } )    # keyword args passed to networkx.draw()</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.drawLimid">
+<code class="descname">drawLimid</code><span class="sig-paren">(</span><em>C</em>, <em>D</em>, <em>U</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.drawLimid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.drawLimid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draw a limited-memory influence diagram (limid) using networkx</p>
+<dl class="docutils">
+<dt>Args:</dt><dd><code class="docutils literal notranslate"><span class="pre">**kwargs</span></code>: remaining keyword arguments passed to networkx.draw()</dd>
+</dl>
+<p>Example:
+&gt;&gt;&gt; model.drawLimid(C,D,U, var_labels={0:‘0’, … } )    # keyword args passed to networkx.draw()</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.drawMarkovGraph">
+<code class="descname">drawMarkovGraph</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.drawMarkovGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.drawMarkovGraph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draw a Markov random field using networkx function calls</p>
+<dl class="docutils">
+<dt>Args:</dt><dd><code class="docutils literal notranslate"><span class="pre">**kwargs</span></code>: remaining keyword arguments passed to networkx.draw()</dd>
+</dl>
+<p>Example:
+&gt;&gt;&gt; model.drawMarkovGraph( labels={0:‘0’, … } )    # keyword args passed to networkx.draw()</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.eliminate">
+<code class="descname">eliminate</code><span class="sig-paren">(</span><em>elimVars</em>, <em>elimOp</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.eliminate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.eliminate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Eliminate (remove) a set of variables from the model</p>
+<dl class="docutils">
+<dt>Args:</dt><dd>elimVars (iterable): list of variables to eliminate (in order of elimination)
+elimOp (str or lambda-fn): function to eliminate variable v from factor F; ‘max’, ‘min’, ‘sum’, ‘lse’,
+or a user-defined custom function, e.g., ‘lambda F,v: …’</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.factorsWith">
+<code class="descname">factorsWith</code><span class="sig-paren">(</span><em>v</em>, <em>copy=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.factorsWith"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.factorsWith" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of all factors that include variable v</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.factorsWithAll">
+<code class="descname">factorsWithAll</code><span class="sig-paren">(</span><em>vs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.factorsWithAll"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.factorsWithAll" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of all factors that include all variables in the list vs</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.factorsWithAny">
+<code class="descname">factorsWithAny</code><span class="sig-paren">(</span><em>vs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.factorsWithAny"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.factorsWithAny" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of all factors that include any variables in the list vs</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.isBN">
+<code class="descname">isBN</code><span class="sig-paren">(</span><em>tol=1e-06</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.isBN"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.isBN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether the graphical model is a valid Bayes net (one CPT per variable)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.isBinary">
+<code class="descname">isBinary</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.isBinary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.isBinary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether the graphical model is binary (all variables &lt;= 2 states)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.isCSP">
+<code class="descname">isCSP</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.isCSP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.isCSP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether the graphical model is a valid CSP (all zeros or ones)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.isPairwise">
+<code class="descname">isPairwise</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.isPairwise"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.isPairwise" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether the graphical model is pairwise (has maximum scope size 2)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.joint">
+<code class="descname">joint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.joint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.joint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute brute-force joint function F(x) = prod_r f_r(x_r) as a (large) factor</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.logValue">
+<code class="descname">logValue</code><span class="sig-paren">(</span><em>x</em>, <em>subset=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.logValue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.logValue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate log F(x) = sum_r log f_r(x_r) for some (full) configuration x.
+If optional subset != None, uses <em>only</em> the factors in the Markov blanket of subset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.makeCanonical">
+<code class="descname">makeCanonical</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.makeCanonical"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.makeCanonical" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add/merge factors to make a canonical factor graph: singleton factors plus maximal cliques</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.makeMinimal">
+<code class="descname">makeMinimal</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.makeMinimal"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.makeMinimal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge factors to make a minimal factor graph: retain only factors over maximal cliques</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.markovBlanket">
+<code class="descname">markovBlanket</code><span class="sig-paren">(</span><em>v</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.markovBlanket"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.markovBlanket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the Markov blanket of variable v (all variables involved in a factor with v)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.nfactors">
+<em class="property">property </em><code class="descname">nfactors</code><a class="headerlink" href="#pyGM.GraphModel.nfactors" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of factors in the model</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.nvar">
+<em class="property">property </em><code class="descname">nvar</code><a class="headerlink" href="#pyGM.GraphModel.nvar" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of variables ( = largest variable id) in the model</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.nxMarkovGraph">
+<code class="descname">nxMarkovGraph</code><span class="sig-paren">(</span><em>all_vars=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.nxMarkovGraph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.nxMarkovGraph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get networkx Graph object of the Markov graph of the model</p>
+<p>Example:
+&gt;&gt;&gt; G = nxMarkovGraph(model)
+&gt;&gt;&gt; nx.draw(G)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.removeFactors">
+<code class="descname">removeFactors</code><span class="sig-paren">(</span><em>flist</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.removeFactors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.removeFactors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove a list of factors from the model</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="o">.</span><span class="n">removeFactors</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">([</span><span class="mi">0</span><span class="p">]))</span>    <span class="c1"># remove all factors involving X0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.toExp">
+<code class="descname">toExp</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.toExp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.toExp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert internal factors to exp form (product of probabilities) if not.  May use ‘isLog’ to check.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.toLog">
+<code class="descname">toLog</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.toLog"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.toLog" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert internal factors to log form (if not already).  May use ‘isLog’ to check.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.value">
+<code class="descname">value</code><span class="sig-paren">(</span><em>x</em>, <em>subset=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.value"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.value" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate F(x) = prod_r f_r(x_r) for some (full) configuration x.
+If optional subset != None, uses <em>only</em> the factors in the Markov blanket of subset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.var">
+<code class="descname">var</code><span class="sig-paren">(</span><em>i</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/graphmodel.html#GraphModel.var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.GraphModel.var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a variable object (with # states) for id ‘i’; equals model.X[i]</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyGM.GraphModel.vars">
+<em class="property">property </em><code class="descname">vars</code><a class="headerlink" href="#pyGM.GraphModel.vars" title="Permalink to this definition">¶</a></dt>
+<dd><p>List of variables in the graphical model; equals model.X</p>
+</dd></dl>
+
+</dd></dl>
+
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="factor.html">Factor methods</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="draw.html">Drawing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="factor.html" title="previous chapter">pyGM: Factor Objects</a></li>
+      <li>Next: <a href="filetypes.html" title="next chapter">pyGM: File Input/Output</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/graphmodel.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

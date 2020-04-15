@@ -1,0 +1,14 @@
+
+pyGM: Graphical Models
+================================
+
+.. autoclass:: pyGM.GraphModel
+   :members:
+
+
+
+* :ref:`genindex`
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

@@ -1,0 +1,986 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM.graphmodel &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyGM.graphmodel</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">graphmodel.py</span>
+
+<span class="sd">Defines a graphical model container class for reasoning about graphical models</span>
+
+<span class="sd">Version 0.0.1 (2015-09-28)</span>
+<span class="sd">(c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">operator</span> <span class="k">as</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">sortedcontainers</span> <span class="k">import</span> <span class="n">SortedSet</span><span class="p">;</span>
+<span class="kn">from</span> <span class="nn">sortedcontainers</span> <span class="k">import</span> <span class="n">SortedListWithKey</span><span class="p">;</span>
+
+<span class="n">inf</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s1">&#39;inf&#39;</span><span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">pyGM.factor</span> <span class="k">import</span> <span class="o">*</span>
+
+
+
+
+<span class="c1"># Make a simple sorted set of factors, ordered by clique size, then lexicographical by scope</span>
+<span class="k">def</span> <span class="nf">factorSet</span><span class="p">(</span><span class="n">it</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span> <span class="k">return</span> <span class="n">SortedSet</span><span class="p">(</span><span class="n">iterable</span><span class="o">=</span><span class="n">it</span><span class="p">,</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">f</span><span class="p">:</span><span class="s1">&#39;</span><span class="si">{:04d}</span><span class="s1">.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">nvar</span><span class="p">)</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">)[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+<span class="c1">#def factorSet(it=None): return SortedListWithKey(iterable=it,key=lambda f:&#39;{:04d}.&#39;.format(f.nvar)+str(f.vars)[1:-1])</span>
+<span class="c1"># So, fs = factorSet([list]) will make sure:</span>
+<span class="c1">#   fs[0] is a minimal factor (smallest # of variables) and fs[-1] is a maximal factor (largest # of variables)</span>
+
+<div class="viewcode-block" id="GraphModel"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel">[docs]</a><span class="k">class</span> <span class="nc">GraphModel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;A basic graphical model class; represents a collection of factors.</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; flist = readUai(&#39;myfile.uai&#39;)  # read a list of factors from a UAI format file</span>
+<span class="sd">  &gt;&gt;&gt; model = GraphModel(flist)      # makes a copy of the factors for manipulation</span>
+
+<span class="sd">  The model may be stored in an exponential, product of factors form:  f(X) = \prod_r f_r(X_r),</span>
+<span class="sd">  or in a log-probability, sum of factors form:  \theta(X) = \sum_r \theta_r(X_r).</span>
+<span class="sd">  </span>
+<span class="sd">  Various accessor functions enable finding factors that depend on one or more variables, variables that</span>
+<span class="sd">  share one or more factors (their Markov blanket), manipulations to the graph (such as eliminating one</span>
+<span class="sd">  or more variables), and visualization (through networkx).</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+
+  <span class="n">X</span>            <span class="o">=</span> <span class="p">[]</span>            <span class="c1"># variables model defined over</span>
+  <span class="n">factors</span>      <span class="o">=</span> <span class="n">factorSet</span><span class="p">()</span>   <span class="c1"># collection of factors that make up the model, sorted by scope size, lex</span>
+  <span class="n">factorsByVar</span> <span class="o">=</span> <span class="p">[]</span>            <span class="c1"># factor lookup by variable:  var -&gt; factor list </span>
+ 
+  <span class="c1">#TODO: useful stuff for algorithm objects interacting with the graph</span>
+  <span class="n">lock</span>         <span class="o">=</span> <span class="kc">False</span>         <span class="c1"># are factors &quot;locked&quot;, or are reparameterization changes OK?</span>
+  <span class="n">sig</span>          <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>            <span class="c1"># &quot;signature&quot; of factor cliques; changes if model structure (cliques) changes</span>
+ 
+  <span class="n">isLog</span> <span class="o">=</span> <span class="kc">False</span>                <span class="c1"># flag: additive (log probability) model vs multiplicative (probability) model </span>
+
+
+  <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># TODO: finish</span>
+    <span class="k">return</span> <span class="s2">&quot;Graphical model: </span><span class="si">{}</span><span class="s2"> vars, </span><span class="si">{}</span><span class="s2"> factors&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nvar</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">nfactors</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">factorList</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">isLog</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>   
+    <span class="sd">&quot;&quot;&quot;Create a graphical model object from a factor list.  Maintains local copies of the factors.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">       factorList (list): A list of factors defining the graphical model</span>
+<span class="sd">       copy (bool): Whether the model should make its own internal copy of all factors; default True</span>
+<span class="sd">       isLog (bool): Whether the factors are interpreted as log-probability factors; default False</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">factors</span> <span class="o">=</span> <span class="n">factorSet</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">lock</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">sig</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span> <span class="o">=</span> <span class="n">isLog</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">factorList</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">addFactors</span><span class="p">(</span><span class="n">factorList</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span>
+  
+<div class="viewcode-block" id="GraphModel.toLog"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.toLog">[docs]</a>  <span class="k">def</span> <span class="nf">toLog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Convert internal factors to log form (if not already).  May use &#39;isLog&#39; to check.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span> <span class="n">f</span><span class="o">.</span><span class="n">logIP</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="GraphModel.toExp"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.toExp">[docs]</a>  <span class="k">def</span> <span class="nf">toExp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Convert internal factors to exp form (product of probabilities) if not.  May use &#39;isLog&#39; to check.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span> <span class="n">f</span><span class="o">.</span><span class="n">expIP</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+ 
+<div class="viewcode-block" id="GraphModel.copy"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.copy">[docs]</a>  <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a (deep) copy of the graphical model&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">copy</span> <span class="k">as</span> <span class="nn">pcopy</span>
+    <span class="k">return</span> <span class="n">pcopy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GraphModel.addFactors"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.addFactors">[docs]</a>  <span class="k">def</span> <span class="nf">addFactors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">flist</span><span class="p">,</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Add a list of factors to the model; factors are copied locally unless copy = False&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">copy</span> <span class="k">as</span> <span class="nn">pcopy</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">copy</span><span class="p">):</span> <span class="n">flist</span> <span class="o">=</span> <span class="n">pcopy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">flist</span><span class="p">)</span>  <span class="c1"># create new factor copies that this model &quot;owns&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">flist</span><span class="p">);</span>   <span class="c1"># add factor to set of all factors, and to by-variable indexing</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">flist</span><span class="p">:</span>
+      <span class="c1"># TODO: if constant do something else?  (Currently just leave it in factors list)</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)):</span> 
+          <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span> <span class="p">[</span><span class="n">Var</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">),</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="p">]</span> <span class="p">)</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span> <span class="p">[</span> <span class="n">factorSet</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">),</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="p">]</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">.</span><span class="n">states</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>   <span class="c1"># copy variable info if undefined, then check:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">.</span><span class="n">states</span> <span class="o">!=</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Incorrect # of states&#39;</span><span class="p">,</span><span class="n">v</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">sig</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span>     <span class="c1"># TODO: check if structure is / can be preserved?</span></div>
+
+<div class="viewcode-block" id="GraphModel.removeFactors"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.removeFactors">[docs]</a>  <span class="k">def</span> <span class="nf">removeFactors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">flist</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Remove a list of factors from the model</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; model.removeFactors(model.factorsWith([0]))    # remove all factors involving X0</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span><span class="n">flist</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">flist</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">sig</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span>     <span class="c1"># TODO: check if structure is / can be preserved?</span></div>
+
+<div class="viewcode-block" id="GraphModel.makeCanonical"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.makeCanonical">[docs]</a>  <span class="k">def</span> <span class="nf">makeCanonical</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Add/merge factors to make a canonical factor graph: singleton factors plus maximal cliques&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="n">fs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWithAll</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">)</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">nvar</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">fs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">f</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">fs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">f</span>
+        <span class="k">else</span><span class="p">:</span>          <span class="n">fs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*=</span> <span class="n">f</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">removeFactors</span><span class="p">([</span><span class="n">f</span><span class="p">])</span></div>
+        
+<div class="viewcode-block" id="GraphModel.makeMinimal"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.makeMinimal">[docs]</a>  <span class="k">def</span> <span class="nf">makeMinimal</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Merge factors to make a minimal factor graph: retain only factors over maximal cliques&quot;&quot;&quot;</span>
+    <span class="n">to_remove</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="n">fs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWithAll</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">)</span>
+      <span class="n">largest</span> <span class="o">=</span> <span class="n">fs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">fs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">f</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">largest</span> <span class="o">+=</span> <span class="n">f</span>
+        <span class="k">else</span><span class="p">:</span>          <span class="n">largest</span> <span class="o">*=</span> <span class="n">f</span>
+        <span class="n">to_remove</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">removeFactors</span><span class="p">(</span><span class="n">to_remove</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GraphModel.factorsWith"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.factorsWith">[docs]</a>  <span class="k">def</span> <span class="nf">factorsWith</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">v</span><span class="p">,</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get the list of all factors that include variable v&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="n">copy</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="GraphModel.factorsWithAny"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.factorsWithAny">[docs]</a>  <span class="k">def</span> <span class="nf">factorsWithAny</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">vs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get the list of all factors that include any variables in the list vs&quot;&quot;&quot;</span>
+    <span class="n">flist</span> <span class="o">=</span> <span class="n">factorSet</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vs</span><span class="p">:</span> <span class="n">flist</span><span class="o">.</span><span class="n">update</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="p">)</span>
+    <span class="k">return</span> <span class="n">flist</span></div>
+
+<div class="viewcode-block" id="GraphModel.factorsWithAll"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.factorsWithAll">[docs]</a>  <span class="k">def</span> <span class="nf">factorsWithAll</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">vs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get the list of all factors that include all variables in the list vs&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">flist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">vs</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vs</span><span class="p">:</span> <span class="n">flist</span><span class="o">.</span><span class="n">intersection_update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">flist</span></div>
+  
+<div class="viewcode-block" id="GraphModel.markovBlanket"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.markovBlanket">[docs]</a>  <span class="k">def</span> <span class="nf">markovBlanket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">v</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get the Markov blanket of variable v (all variables involved in a factor with v)&quot;&quot;&quot;</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsByVar</span><span class="p">[</span><span class="n">v</span><span class="p">]:</span> <span class="n">vs</span> <span class="o">|=</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span>
+    <span class="n">vs</span> <span class="o">-=</span> <span class="p">[</span><span class="n">v</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">vs</span></div>
+ 
+<div class="viewcode-block" id="GraphModel.value"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.value">[docs]</a>  <span class="k">def</span> <span class="nf">value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">x</span><span class="p">,</span><span class="n">subset</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x.</span>
+<span class="sd">         If optional subset != None, uses *only* the factors in the Markov blanket of subset.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">factors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span> <span class="k">if</span> <span class="n">subset</span><span class="o">==</span><span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWithAny</span><span class="p">(</span><span class="n">subset</span><span class="p">)</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span> <span class="nb">sum</span><span class="p">(</span> <span class="p">[</span> <span class="n">f</span><span class="o">.</span><span class="n">valueMap</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">]</span> <span class="p">)</span> <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>          <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">product</span><span class="p">(</span> <span class="p">[</span> <span class="n">f</span><span class="o">.</span><span class="n">valueMap</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">]</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GraphModel.logValue"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.logValue">[docs]</a>  <span class="k">def</span> <span class="nf">logValue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">x</span><span class="p">,</span><span class="n">subset</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span> 
+    <span class="sd">&quot;&quot;&quot;Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x.</span>
+<span class="sd">         If optional subset != None, uses *only* the factors in the Markov blanket of subset.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">factors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span> <span class="k">if</span> <span class="n">subset</span><span class="o">==</span><span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWithAny</span><span class="p">(</span><span class="n">subset</span><span class="p">)</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span> <span class="p">[</span> <span class="n">f</span><span class="o">.</span><span class="n">valueMap</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">]</span> <span class="p">)</span> 
+    <span class="k">else</span><span class="p">:</span>          <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span> <span class="p">[</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">valueMap</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">]</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GraphModel.isBinary"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.isBinary">[docs]</a>  <span class="k">def</span> <span class="nf">isBinary</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>   <span class="c1"># Check whether the model is binary (all variables binary)</span>
+    <span class="sd">&quot;&quot;&quot;Check whether the graphical model is binary (all variables &lt;= 2 states)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">all</span><span class="p">(</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">states</span> <span class="o">&lt;=</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">]</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GraphModel.isPairwise"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.isPairwise">[docs]</a>  <span class="k">def</span> <span class="nf">isPairwise</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="c1"># Check whether the model is pairwise (all factors pairwise)</span>
+    <span class="sd">&quot;&quot;&quot;Check whether the graphical model is pairwise (has maximum scope size 2)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">all</span><span class="p">(</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">)</span><span class="o">&lt;=</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">]</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GraphModel.isCSP"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.isCSP">[docs]</a>  <span class="k">def</span> <span class="nf">isCSP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+    <span class="sd">&quot;&quot;&quot;Check whether the graphical model is a valid CSP (all zeros or ones)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">isTableCSP</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span> <span class="p">:</span> <span class="nb">all</span><span class="p">(</span> <span class="p">(</span><span class="n">t</span><span class="o">==-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">t</span><span class="o">==</span><span class="mf">0.</span><span class="p">)</span> <span class="p">)</span> 
+    <span class="k">else</span><span class="p">:</span>          <span class="n">isTableCSP</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span> <span class="p">:</span> <span class="nb">all</span><span class="p">(</span> <span class="p">(</span><span class="n">t</span><span class="o">==</span><span class="mf">0.</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">t</span><span class="o">==</span><span class="mf">1.</span><span class="p">)</span> <span class="p">)</span>   
+    <span class="k">return</span> <span class="nb">all</span><span class="p">(</span> <span class="p">[</span><span class="n">isTableCSP</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">table</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">]</span> <span class="p">)</span> </div>
+
+<div class="viewcode-block" id="GraphModel.isBN"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.isBN">[docs]</a>  <span class="k">def</span> <span class="nf">isBN</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">):</span>  <span class="c1"># Check whether the model is a valid Bayes Net</span>
+    <span class="sd">&quot;&quot;&quot;Check whether the graphical model is a valid Bayes net (one CPT per variable) &quot;&quot;&quot;</span>
+    <span class="n">topo_order</span> <span class="o">=</span> <span class="n">bnOrder</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>                              <span class="c1"># TODO: allow user-provided order?</span>
+    <span class="k">if</span> <span class="n">topo_order</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># Now check to make sure each factor is a CPT for its last variable</span>
+    <span class="n">pri</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">topo_order</span><span class="p">),))</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">pri</span><span class="p">[</span><span class="n">topo_order</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">topo_order</span><span class="p">))</span>
+    <span class="n">found</span>  <span class="o">=</span> <span class="p">[</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">states</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="p">]</span>  <span class="c1"># track which variables have CPTs</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="n">X</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">([</span><span class="n">pri</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">])</span> <span class="p">]</span>     <span class="c1"># which is the last variable in this factor?</span>
+      <span class="n">found</span><span class="p">[</span><span class="n">X</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+      <span class="n">tmp</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">sum</span><span class="p">([</span><span class="n">X</span><span class="p">])</span> <span class="o">-</span> <span class="mf">1.0</span>                         <span class="c1"># check that each row sums to 1.0; TODO: assumes product semantics</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="n">tmp</span> <span class="o">=</span> <span class="n">tmp</span><span class="o">.</span><span class="n">absIP</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+      <span class="k">except</span><span class="p">:</span>
+        <span class="n">tmp</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">tmp</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">tmp</span> <span class="o">&gt;</span> <span class="n">tol</span><span class="p">:</span> <span class="k">return</span> <span class="kc">False</span>                     <span class="c1"># fail if not a CPT for X</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">found</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="k">return</span> <span class="kc">False</span>               <span class="c1"># fail if missing some variable&#39;s CPT</span>
+    <span class="k">return</span> <span class="kc">True</span></div>
+    
+
+  <span class="nd">@property</span>
+  <span class="k">def</span> <span class="nf">vars</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;List of variables in the graphical model; equals model.X&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span>
+
+<div class="viewcode-block" id="GraphModel.var"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.var">[docs]</a>  <span class="k">def</span> <span class="nf">var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">i</span><span class="p">):</span>   <span class="c1"># TODO: change to property to access (read only?) X?</span>
+    <span class="sd">&quot;&quot;&quot;Return a variable object (with # states) for id &#39;i&#39;; equals model.X[i]&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">]</span></div>
+
+  <span class="nd">@property</span>
+  <span class="k">def</span> <span class="nf">nvar</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;The number of variables ( = largest variable id) in the model&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+
+  <span class="nd">@property</span>
+  <span class="k">def</span> <span class="nf">nfactors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+    <span class="sd">&quot;&quot;&quot;The number of factors in the model&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">)</span>
+
+
+
+<div class="viewcode-block" id="GraphModel.condition"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.condition">[docs]</a>  <span class="k">def</span> <span class="nf">condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">evidence</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Condition (clamp) the graphical model on a partial configuration (dict) {Xi:xi, Xj:xj, ...}&quot;&quot;&quot;</span>
+    <span class="c1"># TODO: optionally, ensure re-added factor is maximal, or modify an existing one (fWithAll(vs)[-1]?)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">evidence</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="k">return</span>
+    <span class="k">for</span> <span class="n">v</span><span class="p">,</span><span class="n">x</span> <span class="ow">in</span> <span class="n">evidence</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+      <span class="n">constant</span> <span class="o">=</span> <span class="mf">0.0</span>
+      <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">removeFactors</span><span class="p">([</span><span class="n">f</span><span class="p">])</span>
+        <span class="n">fc</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">condition</span><span class="p">({</span><span class="n">v</span><span class="p">:</span><span class="n">x</span><span class="p">})</span>                       
+        <span class="k">if</span> <span class="p">(</span><span class="n">fc</span><span class="o">.</span><span class="n">nvar</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+          <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">constant</span> <span class="o">+=</span> <span class="n">fc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>            <span class="c1"># if it&#39;s now a constant, just pull it out </span>
+          <span class="k">else</span><span class="p">:</span>          <span class="n">constant</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">fc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span> 
+          <span class="bp">self</span><span class="o">.</span><span class="n">addFactors</span><span class="p">([</span><span class="n">fc</span><span class="p">],</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>            <span class="c1"># otherwise add the factor back to the model</span>
+      <span class="c1"># add delta f&#39;n factor for each variable, and distribute any constant value into this factor</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">f</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]],</span><span class="o">-</span><span class="n">inf</span><span class="p">);</span> <span class="n">f</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">constant</span>
+      <span class="k">else</span><span class="p">:</span>          <span class="n">f</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]],</span><span class="mf">0.0</span><span class="p">);</span> <span class="n">f</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">constant</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">addFactors</span><span class="p">([</span><span class="n">f</span><span class="p">],</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GraphModel.condition2"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.condition2">[docs]</a>  <span class="k">def</span> <span class="nf">condition2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">xs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Condition (clamp) the graphical model on the partial configuration vs=xs (may be lists or tuples)&quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">condition</span><span class="p">(</span> <span class="p">{</span><span class="n">v</span><span class="p">:</span><span class="n">x</span> <span class="k">for</span> <span class="n">v</span><span class="p">,</span><span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span><span class="n">xs</span><span class="p">)}</span> <span class="p">);</span></div>
+
+  <span class="c1">#def cfg2str(cfg):</span>
+  <span class="c1">#  return &#39;&#39;.join(str(cfg[i]) if i in cfg else &#39;-&#39; for i in self.X);</span>
+     
+<div class="viewcode-block" id="GraphModel.eliminate"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.eliminate">[docs]</a>  <span class="k">def</span> <span class="nf">eliminate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elimVars</span><span class="p">,</span> <span class="n">elimOp</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate (remove) a set of variables from the model</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">      elimVars (iterable): list of variables to eliminate (in order of elimination)</span>
+<span class="sd">      elimOp (str or lambda-fn): function to eliminate variable v from factor F; &#39;max&#39;, &#39;min&#39;, &#39;sum&#39;, &#39;lse&#39;,</span>
+<span class="sd">      or a user-defined custom function, e.g., &#39;lambda F,v: ...&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">elimVars</span><span class="p">,</span><span class="n">Var</span><span class="p">)</span><span class="o">|</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">elimVars</span><span class="p">,</span><span class="nb">int</span><span class="p">):</span> <span class="n">elimVars</span> <span class="o">=</span> <span class="p">[</span><span class="n">elimVars</span><span class="p">]</span>   <span class="c1"># check for single-var case</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">elimOp</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>    <span class="c1"># Basic elimination operators can be specified by a string</span>
+        <span class="n">elimOp</span> <span class="o">=</span> <span class="n">elimOp</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span>   <span class="n">elimOp</span> <span class="o">==</span> <span class="s2">&quot;sum&quot;</span><span class="p">:</span> <span class="n">elimOp</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">F</span><span class="p">,</span><span class="n">X</span><span class="p">:</span> <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">elimOp</span> <span class="o">==</span> <span class="s2">&quot;lse&quot;</span><span class="p">:</span> <span class="n">elimOp</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">F</span><span class="p">,</span><span class="n">X</span><span class="p">:</span> <span class="n">F</span><span class="o">.</span><span class="n">lse</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">elimOp</span> <span class="o">==</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="n">elimOp</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">F</span><span class="p">,</span><span class="n">X</span><span class="p">:</span> <span class="n">F</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">elimOp</span> <span class="o">==</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="n">elimOp</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">F</span><span class="p">,</span><span class="n">X</span><span class="p">:</span> <span class="n">F</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unrecognized elimination type </span><span class="si">{}</span><span class="s2">; &#39;sum&#39;,&#39;lse&#39;,&#39;max&#39;,&#39;min&#39; or custom function&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">elimOp</span><span class="p">));</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">elimVars</span><span class="p">:</span>
+      <span class="n">flist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+      <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">flist</span><span class="p">):</span>
+        <span class="n">F</span> <span class="o">=</span> <span class="n">flist</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">v</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]:</span> 
+          <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">F</span> <span class="o">+=</span> <span class="n">f</span>
+          <span class="k">else</span><span class="p">:</span>          <span class="n">F</span> <span class="o">*=</span> <span class="n">f</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">removeFactors</span><span class="p">(</span><span class="n">flist</span><span class="p">)</span>
+        <span class="n">F</span> <span class="o">=</span> <span class="n">elimOp</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="p">[</span><span class="n">v</span><span class="p">])</span>
+        <span class="k">try</span><span class="p">:</span>
+          <span class="n">tmp</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">vars</span>                <span class="c1"># raise exception if no variables (not Factor or similar)</span>
+          <span class="bp">self</span><span class="o">.</span><span class="n">addFactors</span><span class="p">([</span><span class="n">F</span><span class="p">],</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># add factor F by reference</span>
+        <span class="k">except</span><span class="p">:</span>  
+          <span class="bp">self</span><span class="o">.</span><span class="n">addFactors</span><span class="p">([</span><span class="n">Factor</span><span class="p">([],</span><span class="n">F</span><span class="p">)],</span><span class="kc">False</span><span class="p">)</span>          <span class="c1"># scalar =&gt; add as scalar factor</span>
+          <span class="c1"># TODO: could check for existing scalar? or leave as is to preserve independent problem correspondence?</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="o">=</span> <span class="n">Var</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">),</span><span class="mi">1</span><span class="p">)</span>    <span class="c1"># remove &quot;concept&quot; of variable v ( =&gt; single state)</span></div>
+
+<div class="viewcode-block" id="GraphModel.joint"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.joint">[docs]</a>  <span class="k">def</span> <span class="nf">joint</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute brute-force joint function F(x) = \prod_r f_r(x_r) as a (large) factor&quot;&quot;&quot;</span>
+    <span class="n">F</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span> 
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">F</span> <span class="o">+=</span> <span class="n">f</span>
+      <span class="k">else</span><span class="p">:</span>          <span class="n">F</span> <span class="o">*=</span> <span class="n">f</span>   
+    <span class="k">return</span> <span class="n">F</span></div>
+
+<div class="viewcode-block" id="GraphModel.connectedComponents"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.connectedComponents">[docs]</a>  <span class="k">def</span> <span class="nf">connectedComponents</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find the connected components of the model&#39;s Markov graph.  Returns a list of sets of variables.&quot;&quot;&quot;</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">X</span><span class="p">:</span>
+        <span class="n">Xi</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">Xi</span><span class="o">.</span><span class="n">states</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span> <span class="k">continue</span>    <span class="c1"># don&#39;t include missing variables </span>
+        <span class="n">group</span> <span class="o">=</span> <span class="p">{</span><span class="n">Xi</span><span class="p">}</span>                  <span class="c1"># start a new group with this variable</span>
+        <span class="n">queue</span> <span class="o">=</span> <span class="p">[</span><span class="n">Xi</span><span class="p">]</span>                  <span class="c1"># do DFS on the graph from Xi to find its connected component:</span>
+        <span class="k">while</span> <span class="n">queue</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+            <span class="n">nbrs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">markovBlanket</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>   <span class="c1"># get all connected variables</span>
+            <span class="n">nbrs</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>  <span class="c1"># remove any we&#39;ve already seen</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span><span class="n">nbrs</span><span class="p">)</span>      <span class="c1"># remove new ones from unexplored variable list</span>
+            <span class="n">group</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">nbrs</span><span class="p">)</span>             <span class="c1"># add them to this connected component</span>
+            <span class="n">queue</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">nbrs</span><span class="p">)</span>             <span class="c1"># and continue exploring from them in DFS order</span>
+        <span class="n">components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">components</span></div>
+        
+    <span class="c1"># Note: to split graph into connected components, use e.g.</span>
+    <span class="c1"># &gt;&gt;&gt; [GraphModel(model.factorsWithAny(vs)) for vs in model.connectedComponents()]</span>
+    <span class="c1"># (although each model may have the full set of variables, most with 0 or 1 state...)  </span>
+    <span class="c1"># NOTE: don&#39;t forget about any scalar factors: [f for f in model.factors where f.nvar==0]</span>
+    
+    
+    
+
+
+<div class="viewcode-block" id="GraphModel.nxMarkovGraph"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.nxMarkovGraph">[docs]</a>  <span class="k">def</span> <span class="nf">nxMarkovGraph</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">all_vars</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get networkx Graph object of the Markov graph of the model</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    &gt;&gt;&gt; G = nxMarkovGraph(model)</span>
+<span class="sd">    &gt;&gt;&gt; nx.draw(G)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="k">if</span> <span class="p">(</span><span class="n">all_vars</span> <span class="ow">or</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)]</span> <span class="p">)</span> 
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">v2</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+          <span class="k">if</span> <span class="p">(</span><span class="n">v1</span> <span class="o">!=</span> <span class="n">v2</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">all_vars</span> <span class="ow">or</span> <span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">v2</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)):</span> 
+            <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">v2</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">G</span> 
+    <span class="sd">&quot;&quot;&quot; Plotting examples:</span>
+<span class="sd">    fig,ax=plt.subplots(1,2)</span>
+<span class="sd">    pos = nx.spring_layout(G) # so we can use same positions multiple times...</span>
+<span class="sd">    # use nodelist=[nodes-to-draw] to only show nodes in model</span>
+<span class="sd">    nx.draw(G,with_labels=True,labels={0:&#39;0&#39;,1:&#39;1&#39;,2:&#39;2&#39;,3:&#39;3&#39;,4:&#39;4&#39;,5:&#39;5&#39;,6:&#39;6&#39;},</span>
+<span class="sd">              node_color=[.3,.3,.3,.7,.7,.7,.7],vmin=0.0,vmax=1.0,pos=pos,ax=ax[0])</span>
+<span class="sd">    nx.draw(G,with_labels=True,labels={0:&#39;0&#39;,1:&#39;1&#39;,2:&#39;2&#39;,3:&#39;3&#39;,4:&#39;4&#39;,5:&#39;5&#39;,6:&#39;6&#39;},</span>
+<span class="sd">              node_color=[.3,.3,.3,.7,.7,.7,.7],vmin=0.0,vmax=1.0,pos=pos,ax=ax[1])</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="GraphModel.drawMarkovGraph"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.drawMarkovGraph">[docs]</a>  <span class="k">def</span> <span class="nf">drawMarkovGraph</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Draw a Markov random field using networkx function calls</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">      ``**kwargs``: remaining keyword arguments passed to networkx.draw()</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    &gt;&gt;&gt; model.drawMarkovGraph( labels={0:&#39;0&#39;, ... } )    # keyword args passed to networkx.draw()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: fix defaults; specify shape, size etc. consistent with FG version</span>
+    <span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span> <span class="p">)</span>  <span class="c1"># only non-trivial vars</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">v2</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+          <span class="k">if</span> <span class="p">(</span><span class="n">v1</span> <span class="o">!=</span> <span class="n">v2</span><span class="p">):</span> <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">v2</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;var_labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;var_labels&#39;</span><span class="p">,{</span><span class="n">n</span><span class="p">:</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">G</span><span class="o">.</span><span class="n">nodes</span><span class="p">()})</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;var_labels&#39;</span><span class="p">,{})</span> <span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw</span><span class="p">(</span><span class="n">G</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">G</span></div>
+
+
+
+<div class="viewcode-block" id="GraphModel.drawFactorGraph"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.drawFactorGraph">[docs]</a>  <span class="k">def</span> <span class="nf">drawFactorGraph</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">var_color</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span><span class="n">factor_color</span><span class="o">=</span><span class="p">(</span><span class="o">.</span><span class="mi">2</span><span class="p">,</span><span class="o">.</span><span class="mi">2</span><span class="p">,</span><span class="o">.</span><span class="mi">8</span><span class="p">),</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Draw a factorgraph using networkx function calls</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">      var_color (str, tuple): networkx color descriptor for drawing variable nodes</span>
+<span class="sd">      factor_color (str, tuple): networkx color for drawing factor nodes</span>
+<span class="sd">      var_labels (dict): variable id to label string for variable nodes</span>
+<span class="sd">      factor_labels (dict): factor id to label string for factor nodes</span>
+<span class="sd">      ``**kwargs``: remaining keyword arguments passed to networkx.draw()</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    &gt;&gt;&gt; model.drawFactorGraph( var_labels={0:&#39;0&#39;, ... } )    # keyword args passed to networkx.draw()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: specify var/factor shape,size, position, etc.; return G? silent mode?</span>
+    <span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="n">vNodes</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span>   <span class="c1"># list only non-trivial variables</span>
+    <span class="n">fNodes</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">))]</span>    <span class="c1"># use negative IDs for factors</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="n">vNodes</span> <span class="p">)</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="n">fNodes</span> <span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">f</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">):</span>
+      <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="o">-</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="s1">&#39;pos&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;pos&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">spring_layout</span><span class="p">(</span><span class="n">G</span><span class="p">)</span> <span class="c1"># so we can use same positions multiple times...</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;var_labels&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;var_labels&#39;</span><span class="p">,{</span><span class="n">n</span><span class="p">:</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">vNodes</span><span class="p">})</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;var_labels&#39;</span><span class="p">,{})</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nodelist</span><span class="o">=</span><span class="n">vNodes</span><span class="p">,</span><span class="n">node_color</span><span class="o">=</span><span class="n">var_color</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;factor_labels&#39;</span><span class="p">,{})</span>    <span class="c1"># TODO: need to transform?</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_nodes</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nodelist</span><span class="o">=</span><span class="n">fNodes</span><span class="p">,</span><span class="n">node_color</span><span class="o">=</span><span class="n">factor_color</span><span class="p">,</span><span class="n">node_shape</span><span class="o">=</span><span class="s1">&#39;s&#39;</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_edges</span><span class="p">(</span><span class="n">G</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">G</span></div>
+
+
+
+<div class="viewcode-block" id="GraphModel.drawBayesNet"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.drawBayesNet">[docs]</a>  <span class="k">def</span> <span class="nf">drawBayesNet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Draw a Bayesian Network (directed acyclic graph) using networkx function calls</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">      ``**kwargs``: remaining keyword arguments passed to networkx.draw()</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    &gt;&gt;&gt; model.drawBayesNet( labels={0:&#39;0&#39;, ... } )    # keyword args passed to networkx.draw()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+    <span class="n">topo_order</span> <span class="o">=</span> <span class="n">bnOrder</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>                              <span class="c1"># TODO: allow user-provided order?</span>
+    <span class="k">if</span> <span class="n">topo_order</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Topo order not found; graph is not a Bayes Net?&#39;</span><span class="p">)</span>
+    <span class="n">pri</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">topo_order</span><span class="p">),))</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">pri</span><span class="p">[</span><span class="n">topo_order</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">topo_order</span><span class="p">))</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">()</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span> <span class="p">)</span>  <span class="c1"># only non-trivial vars</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="n">v2label</span> <span class="o">=</span> <span class="n">topo_order</span><span class="p">[</span> <span class="nb">int</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">pri</span><span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">))</span> <span class="p">]</span>
+      <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span> <span class="o">!=</span> <span class="n">v2label</span><span class="p">):</span> <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">v2label</span><span class="p">)</span>
+
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;var_labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;var_labels&#39;</span><span class="p">,{</span><span class="n">n</span><span class="p">:</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">]})</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;labels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;var_labels&#39;</span><span class="p">,{})</span> <span class="p">)</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;arrowstyle&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;arrowstyle&#39;</span><span class="p">,</span><span class="s1">&#39;-&gt;&#39;</span><span class="p">)</span>
+    <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;arrowsize&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;arrowsize&#39;</span><span class="p">,</span><span class="mi">10</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw</span><span class="p">(</span><span class="n">G</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">G</span></div>
+
+
+<div class="viewcode-block" id="GraphModel.drawLimid"><a class="viewcode-back" href="../../graphmodel.html#pyGM.GraphModel.drawLimid">[docs]</a>  <span class="k">def</span> <span class="nf">drawLimid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Draw a limited-memory influence diagram (limid) using networkx </span>
+
+<span class="sd">    Args:</span>
+<span class="sd">      ``**kwargs``: remaining keyword arguments passed to networkx.draw()</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    &gt;&gt;&gt; model.drawLimid(C,D,U, var_labels={0:&#39;0&#39;, ... } )    # keyword args passed to networkx.draw()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+    <span class="n">decisions</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">D</span><span class="p">]</span>                       <span class="c1"># list the decision variables</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">GraphModel</span><span class="p">(</span> <span class="n">C</span> <span class="o">+</span> <span class="p">[</span><span class="n">Factor</span><span class="p">(</span><span class="n">d</span><span class="p">,</span><span class="mf">1.</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">D</span><span class="p">]</span> <span class="p">)</span>  <span class="c1"># get all chance &amp; decision vars, arcs</span>
+    <span class="n">chance</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">decisions</span><span class="p">]</span>
+    <span class="n">util</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">u</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">U</span><span class="p">)]</span>
+    <span class="n">cpd_edges</span><span class="p">,</span> <span class="n">util_edges</span><span class="p">,</span> <span class="n">info_edges</span> <span class="o">=</span> <span class="p">[],[],[]</span>
+    <span class="n">topo_order</span> <span class="o">=</span> <span class="n">bnOrder</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>                          
+    <span class="k">if</span> <span class="n">topo_order</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Topo order not found; graph is not a Bayes Net?&#39;</span><span class="p">)</span>
+    <span class="n">pri</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">topo_order</span><span class="p">),))</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">pri</span><span class="p">[</span><span class="n">topo_order</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">topo_order</span><span class="p">))</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">()</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span> <span class="p">)</span>  <span class="c1"># only non-trivial vars</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span> <span class="n">util</span> <span class="p">)</span>                                       <span class="c1"># add utility nodes</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">factors</span><span class="p">:</span>
+      <span class="n">v2label</span> <span class="o">=</span> <span class="n">topo_order</span><span class="p">[</span> <span class="nb">int</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">pri</span><span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">))</span> <span class="p">]</span>
+      <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span> <span class="o">!=</span> <span class="n">v2label</span><span class="p">):</span> 
+          <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">v2label</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">v2label</span> <span class="ow">in</span> <span class="n">decisions</span><span class="p">:</span> <span class="n">info_edges</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">v2label</span><span class="p">))</span>
+          <span class="k">else</span><span class="p">:</span> <span class="n">cpd_edges</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">v2label</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">u</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">U</span><span class="p">):</span>
+      <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">u</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="o">-</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">util_edges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="n">v1</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="o">-</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="s1">&#39;pos&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;pos&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">spring_layout</span><span class="p">(</span><span class="n">G</span><span class="p">)</span> <span class="c1"># so we can use same positions multiple times...</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_nodes</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nodelist</span><span class="o">=</span><span class="n">decisions</span><span class="p">,</span> <span class="n">node_color</span><span class="o">=</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">,</span><span class="o">.</span><span class="mi">7</span><span class="p">,</span><span class="o">.</span><span class="mi">9</span><span class="p">),</span> <span class="n">node_shape</span><span class="o">=</span><span class="s1">&#39;s&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_nodes</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nodelist</span><span class="o">=</span><span class="n">chance</span><span class="p">,</span> <span class="n">node_color</span><span class="o">=</span><span class="p">(</span><span class="mf">1.</span><span class="p">,</span><span class="mf">1.</span><span class="p">,</span><span class="mf">1.</span><span class="p">),</span> <span class="n">node_shape</span><span class="o">=</span><span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_nodes</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nodelist</span><span class="o">=</span><span class="n">util</span><span class="p">,</span> <span class="n">node_color</span><span class="o">=</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">,</span><span class="o">.</span><span class="mi">9</span><span class="p">,</span><span class="o">.</span><span class="mi">7</span><span class="p">),</span> <span class="n">node_shape</span><span class="o">=</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_edges</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">edgelist</span><span class="o">=</span><span class="n">cpd_edges</span><span class="o">+</span><span class="n">util_edges</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_edges</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">edgelist</span><span class="o">=</span><span class="n">info_edges</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">tmp</span><span class="p">:</span> <span class="n">line</span><span class="o">.</span><span class="n">set_linestyle</span><span class="p">(</span><span class="s1">&#39;dashed&#39;</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">draw_networkx_labels</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div></div>
+
+
+
+<span class="c1">#  def nxFactorGraph(self):</span>
+<span class="c1">#    &quot;&quot;&quot;Get networkx Graph object of the factor graph of the model&quot;&quot;&quot;</span>
+<span class="c1">#    import networkx as nx</span>
+<span class="c1">#    G = nx.Graph()</span>
+<span class="c1">#    vNodes = [v.label for v in self.X]</span>
+<span class="c1">#    fNodes = [-i-1 for i in range(len(self.factors))]</span>
+<span class="c1">#    G.add_nodes_from( vNodes )</span>
+<span class="c1">#    G.add_nodes_from( fNodes )</span>
+<span class="c1">#    for f in self.factors:</span>
+<span class="c1">#      for v1 in f.vars:</span>
+<span class="c1">#        G.add_edge(v1.label,-self.factors.index(f)-1)</span>
+<span class="c1">#    return G </span>
+<span class="c1">#    &quot;&quot;&quot; Plotting examples:</span>
+<span class="c1">#    pos = nx.spring_layout(G) # so we can use same positions multiple times...</span>
+<span class="c1">#    nx.draw_networkx(G,pos=pos, nodelist=[n for n in G.nodes() if n &gt;= 0],node_color=&#39;w&#39;)</span>
+<span class="c1">#    nx.draw_networkx_nodes(G,pos=pos, nodelist=[n for n in G.nodes() if n &lt; 0],node_color=&#39;g&#39;,node_shape=&#39;s&#39;)</span>
+<span class="c1">#    nx.draw_networkx_edges(G,pos=pos)</span>
+<span class="c1">#    nx.draw_networkx_labels(G,pos=pos,labels={n:n for n in G.nodes() if n&gt;=0})</span>
+<span class="c1">#    &quot;&quot;&quot;</span>
+
+
+
+  <span class="c1">############# FUNCTIONS TODO ######################</span>
+  
+  <span class="c1"># Algorithms:</span>
+  <span class="c1">#   (CSP) AC, Backtrack, Local Search;  (GEN) gibbs, mh?, MAS, MBE, WMB, local search, other search?</span>
+  <span class="c1"># Train:</span>
+  <span class="c1">#   CD, ???</span>
+ 
+  <span class="c1"># &quot;MRF&quot; object (variable dependencies only)?  </span>
+
+
+
+
+
+<span class="c1">#### Methods needed</span>
+<span class="c1"># display / __repr__</span>
+
+<span class="c1"># junction tree / wmb?</span>
+
+<span class="c1"># sample</span>
+
+<span class="c1"># gibbs, MH (?), ... trainCD?</span>
+
+
+<span class="c1">#class MRF:</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+
+<span class="k">def</span> <span class="nf">bnOrder</span><span class="p">(</span><span class="n">bn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a topological order for the variables (roots to leaves), assuming &#39;bn&#39; is a Bayes net</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: variable IDs in a topological order from roots to leaves</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="n">GraphModel</span><span class="p">(</span><span class="n">bn</span><span class="o">.</span><span class="n">factors</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># slow? unnecessary?</span>
+    <span class="n">topo_order</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">bn</span><span class="o">.</span><span class="n">nvar</span>
+    <span class="n">pri</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">bn</span><span class="o">.</span><span class="n">nvar</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">bn</span><span class="o">.</span><span class="n">nvar</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">temp</span><span class="o">.</span><span class="n">factors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">nvar</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span> <span class="k">return</span> <span class="kc">None</span>    <span class="c1"># if there are no root variables, not a BN</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">temp</span><span class="o">.</span><span class="n">factors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                  <span class="c1"># otherwise, add root to the topological order</span>
+        <span class="n">topo_order</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">label</span>
+        <span class="n">pri</span><span class="p">[</span><span class="n">X</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+        <span class="n">withX</span> <span class="o">=</span> <span class="n">temp</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">topo_order</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>      <span class="c1"># remove it from its childrens&#39; CPTs</span>
+        <span class="n">temp</span><span class="o">.</span><span class="n">removeFactors</span><span class="p">(</span><span class="n">withX</span><span class="p">)</span>                    <span class="c1">#  to look for the next variable in the order</span>
+        <span class="n">temp</span><span class="o">.</span><span class="n">addFactors</span><span class="p">(</span> <span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">condition2</span><span class="p">([</span><span class="n">X</span><span class="p">],[</span><span class="mi">0</span><span class="p">])</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">withX</span> <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">nvar</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
+    <span class="k">return</span> <span class="n">topo_order</span>
+
+
+<span class="k">def</span> <span class="nf">bnPrune</span><span class="p">(</span><span class="n">bn</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Prune all non-ancestors of &#39;query&#39; in Bayesian network &#39;bn&#39;</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="c1"># TODO: implement: find all ancestors of query; remove non-ancestors (do bn-check elim for safety?)</span>
+  <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;Not implemented&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">bnSample</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">evidence</span><span class="o">=</span><span class="p">{}):</span>
+  <span class="sd">&quot;&quot;&quot;Draw a sample from a Bayes net with given topological order and evidence E={ Xi: k ... }</span>
+
+<span class="sd">  Args:</span>
+<span class="sd">    model (GraphModel): A Bayesian network or other graphical model</span>
+<span class="sd">    order (list): A topological ordering of the variables, e.g., from ``bnOrder(model)``</span>
+
+<span class="sd">  Returns:</span>
+<span class="sd">     float : lnP, the log-probability of the sampled configuration xs </span>
+<span class="sd">     tuple : xs, the sampled configuration (including evidence)</span>
+
+<span class="sd">  Notes: lnP, the log-probability, does not include any evidence probabilities.  If `model` is not a</span>
+<span class="sd">     Bayes net, the process and lnP will still correspond to some valid distribution over X given E.</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">lnP</span><span class="p">,</span> <span class="n">cfg</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">evidence</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+  <span class="n">pri</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">),))</span><span class="o">-</span><span class="mi">1</span>
+  <span class="n">pri</span><span class="p">[</span><span class="n">order</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">))</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">evidence</span><span class="p">:</span> <span class="k">continue</span>
+    <span class="n">F</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+    <span class="n">fid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span> <span class="p">[</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">pri</span><span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="o">.</span><span class="n">labels</span><span class="p">])</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">F</span> <span class="p">]</span> <span class="p">)</span>  <span class="c1"># find factor with X and earliest neighbors</span>
+    <span class="n">Pi</span> <span class="o">=</span> <span class="n">F</span><span class="p">[</span><span class="n">fid</span><span class="p">]</span><span class="o">.</span><span class="n">condition</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">isLog</span><span class="p">:</span> <span class="n">Pi</span><span class="o">.</span><span class="n">expIP</span><span class="p">()</span>    <span class="c1"># if storing log-factors, exponentiate...</span>
+    <span class="n">Pi</span> <span class="o">/=</span> <span class="n">Pi</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">Pi</span> <span class="o">=</span> <span class="n">Pi</span><span class="o">.</span><span class="n">marginal</span><span class="p">([</span><span class="n">i</span><span class="p">])</span>     <span class="c1"># likely not necessary, but to be safe for non BNs</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">Pi</span><span class="o">.</span><span class="n">sample</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">lnP</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span> <span class="n">Pi</span><span class="p">[</span><span class="n">cfg</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="p">)</span>
+  <span class="k">return</span> <span class="n">lnP</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">)</span> 
+
+<span class="c1"># One-line likelihood weighting estimator:</span>
+<span class="c1"># np.mean( [ np.exp(model.logValue(xs)-lnP) for s in range(1000) for lnP,xs in [gm.bnSample(model,order,evid)] ] )</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+
+
+
+<span class="k">def</span> <span class="nf">_eliminationOrder_OLD</span><span class="p">(</span><span class="n">gm</span><span class="p">,</span> <span class="n">orderMethod</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nExtra</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">inf</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Find an elimination order for a graphical model</span>
+<span class="sd">  Args:</span>
+<span class="sd">    gm (GraphModel): A graphical model object</span>
+<span class="sd">    method (str): Heuristic method; one of {&#39;minfill&#39;,&#39;wtminfill&#39;,&#39;minwidth&#39;,&#39;wtminwidth&#39;,&#39;random&#39;}</span>
+<span class="sd">    nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds</span>
+<span class="sd">        randomness to the order selection process.  0 =&gt; randomly from best; -1 =&gt; no randomness (default)</span>
+<span class="sd">    cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)</span>
+<span class="sd">    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list</span>
+<span class="sd">    priority (list, optional): Optional list of variable priorities; lowest priority variables are </span>
+<span class="sd">        eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.</span>
+<span class="sd">  Returns:</span>
+<span class="sd">    list: The identified elimination order</span>
+<span class="sd">    float: The &quot;score&quot; of this ordering</span>
+<span class="sd">  Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:</span>
+<span class="sd">  &gt;&gt;&gt; ord, score = eliminationOrder(model, &#39;minfill&#39;, nExtra=2, cutoff=score, target=ord) </span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="kn">import</span> <span class="nn">bisect</span>
+  <span class="n">orderMethod</span> <span class="o">=</span> <span class="s1">&#39;minfill&#39;</span> <span class="k">if</span> <span class="n">orderMethod</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">orderMethod</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+  <span class="n">priority</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">]</span> <span class="k">if</span> <span class="n">priority</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">priority</span>
+
+  <span class="k">if</span>   <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;minfill&#39;</span><span class="p">:</span>    <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="nb">sum</span><span class="p">([</span><span class="mf">0.5</span><span class="o">*</span><span class="nb">len</span><span class="p">(</span><span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span><span class="o">-</span><span class="n">adj</span><span class="p">[</span><span class="n">Xk</span><span class="p">])</span> <span class="k">for</span> <span class="n">Xk</span> <span class="ow">in</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]])</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;wtminfill&#39;</span><span class="p">:</span>  <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="nb">sum</span><span class="p">([(</span><span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span><span class="o">-</span><span class="n">adj</span><span class="p">[</span><span class="n">Xk</span><span class="p">])</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span> <span class="k">for</span> <span class="n">Xk</span> <span class="ow">in</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]])</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;minwidth&#39;</span><span class="p">:</span>   <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">])</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;wtminwidth&#39;</span><span class="p">:</span> <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;random&#39;</span><span class="p">:</span>     <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unknown ordering method: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">orderMethod</span><span class="p">))</span>
+
+  <span class="n">adj</span> <span class="o">=</span> <span class="p">[</span> <span class="n">VarSet</span><span class="p">([</span><span class="n">Xi</span><span class="p">])</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span> <span class="p">]</span>
+  <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">:</span> 
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">Xi</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+      <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="o">|=</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span>
+
+  <span class="c1"># initialize priority queue of scores using e.g. heapq or sort</span>
+  <span class="n">scores</span>  <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">priority</span><span class="p">[</span><span class="n">Xi</span><span class="p">],</span><span class="n">score</span><span class="p">(</span><span class="n">adj</span><span class="p">,</span><span class="n">Xi</span><span class="p">),</span><span class="n">Xi</span><span class="p">)</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span> <span class="p">]</span>
+  <span class="n">reverse</span> <span class="o">=</span> <span class="n">scores</span><span class="p">[:]</span>
+  <span class="n">scores</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+  <span class="n">totalSize</span> <span class="o">=</span> <span class="mf">0.0</span>
+  <span class="n">_order</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">]</span>
+
+  <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gm</span><span class="o">.</span><span class="n">nvar</span><span class="p">):</span>
+    <span class="n">pick</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">Pi</span><span class="p">,</span><span class="n">Si</span><span class="p">,</span><span class="n">Xi</span> <span class="o">=</span> <span class="n">scores</span><span class="p">[</span><span class="n">pick</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">nExtra</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+      <span class="n">mx</span> <span class="o">=</span> <span class="n">bisect</span><span class="o">.</span><span class="n">bisect_right</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="p">(</span><span class="n">Pi</span><span class="p">,</span><span class="n">Si</span><span class="p">,</span><span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>  <span class="c1"># get one past last equal-priority &amp; score vars</span>
+      <span class="n">pick</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">mx</span><span class="o">+</span><span class="n">nExtra</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">))</span>                  <span class="c1"># then pick a random &quot;near-best&quot; variable</span>
+      <span class="n">pick</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">pick</span><span class="p">)</span>
+      <span class="n">Pi</span><span class="p">,</span><span class="n">Si</span><span class="p">,</span><span class="n">Xi</span> <span class="o">=</span> <span class="n">scores</span><span class="p">[</span><span class="n">pick</span><span class="p">]</span>
+    <span class="k">del</span> <span class="n">scores</span><span class="p">[</span><span class="n">pick</span><span class="p">]</span>
+    <span class="n">_order</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">Xi</span><span class="o">.</span><span class="n">label</span>        <span class="c1"># write into order[idx] = Xi</span>
+    <span class="n">totalSize</span> <span class="o">+=</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">totalSize</span> <span class="o">&gt;</span> <span class="n">cutoff</span><span class="p">:</span> <span class="k">return</span> <span class="n">target</span><span class="p">,</span><span class="n">cutoff</span>  <span class="c1"># if worse than cutoff, quit with no changes to &quot;target&quot;</span>
+    <span class="n">fix</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">Xj</span> <span class="ow">in</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]:</span>
+      <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span> <span class="o">|=</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span>
+      <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span> <span class="o">-=</span> <span class="p">[</span><span class="n">Xi</span><span class="p">]</span>
+      <span class="n">fix</span> <span class="o">|=</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span>   <span class="c1"># shouldn&#39;t need to fix as much for min-width?</span>
+    <span class="k">for</span> <span class="n">Xj</span> <span class="ow">in</span> <span class="n">fix</span><span class="p">:</span>
+      <span class="n">Pj</span><span class="p">,</span><span class="n">Sj</span><span class="p">,</span><span class="n">Xj</span> <span class="o">=</span> <span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span>
+      <span class="n">jPos</span> <span class="o">=</span> <span class="n">bisect</span><span class="o">.</span><span class="n">bisect_left</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="p">(</span><span class="n">Pj</span><span class="p">,</span><span class="n">Sj</span><span class="p">,</span><span class="n">Xj</span><span class="p">))</span>
+      <span class="k">del</span> <span class="n">scores</span><span class="p">[</span><span class="n">jPos</span><span class="p">]</span>                        <span class="c1"># erase (Pj,Sj,Xj) from heap </span>
+      <span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">Pj</span><span class="p">,</span><span class="n">score</span><span class="p">(</span><span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">),</span><span class="n">Xj</span><span class="p">)</span>     
+      <span class="n">bisect</span><span class="o">.</span><span class="n">insort_left</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">])</span> <span class="c1"># add (Pj,score(adj,Xj),Xj) to heap &amp; update reverse lookup</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> 
+    <span class="n">target</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">target</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">_order</span><span class="p">))])</span>  <span class="c1"># make sure order is the right size</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gm</span><span class="o">.</span><span class="n">nvar</span><span class="p">):</span> <span class="n">target</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">=</span><span class="n">_order</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>   <span class="c1"># copy result if completed without quitting</span>
+  <span class="k">return</span> <span class="n">_order</span><span class="p">,</span><span class="n">totalSize</span>
+
+
+<span class="k">def</span> <span class="nf">eliminationOrder</span><span class="p">(</span><span class="n">gm</span><span class="p">,</span> <span class="n">orderMethod</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nExtra</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="n">inf</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Find an elimination order for a graphical model</span>
+
+<span class="sd">  Args:</span>
+<span class="sd">    gm (GraphModel): A graphical model object</span>
+<span class="sd">    method (str): Heuristic method; one of {&#39;minfill&#39;,&#39;wtminfill&#39;,&#39;minwidth&#39;,&#39;wtminwidth&#39;,&#39;random&#39;}</span>
+<span class="sd">    nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds</span>
+<span class="sd">        randomness to the order selection process.  0 =&gt; randomly from best; -1 =&gt; no randomness (default)</span>
+<span class="sd">    cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)</span>
+<span class="sd">    priority (list, optional): Optional list of variable priorities; lowest priority variables are </span>
+<span class="sd">        eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.</span>
+<span class="sd">    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list</span>
+
+<span class="sd">  Returns:</span>
+<span class="sd">    list: The identified elimination order</span>
+<span class="sd">    float: The &quot;score&quot; of this ordering</span>
+
+<span class="sd">  Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:</span>
+<span class="sd">  &gt;&gt;&gt; ord, score = eliminationOrder(model, &#39;minfill&#39;, nExtra=2, cutoff=score, target=ord) </span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">orderMethod</span> <span class="o">=</span> <span class="s1">&#39;minfill&#39;</span> <span class="k">if</span> <span class="n">orderMethod</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">orderMethod</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+  <span class="n">priority</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">]</span> <span class="k">if</span> <span class="n">priority</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">priority</span>
+
+  <span class="k">if</span>   <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;minfill&#39;</span><span class="p">:</span>    <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="mf">0.5</span><span class="o">*</span><span class="nb">sum</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span><span class="o">-</span><span class="n">adj</span><span class="p">[</span><span class="n">Xk</span><span class="p">])</span> <span class="k">for</span> <span class="n">Xk</span> <span class="ow">in</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]])</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;wtminfill&#39;</span><span class="p">:</span>  <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="nb">sum</span><span class="p">([(</span><span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span><span class="o">-</span><span class="n">adj</span><span class="p">[</span><span class="n">Xk</span><span class="p">])</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span> <span class="k">for</span> <span class="n">Xk</span> <span class="ow">in</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]])</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;minwidth&#39;</span><span class="p">:</span>   <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">])</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;wtminwidth&#39;</span><span class="p">:</span> <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">orderMethod</span> <span class="o">==</span> <span class="s1">&#39;random&#39;</span><span class="p">:</span>     <span class="n">score</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unknown ordering method: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">orderMethod</span><span class="p">))</span>
+
+  <span class="n">adj</span> <span class="o">=</span> <span class="p">[</span> <span class="n">gm</span><span class="o">.</span><span class="n">markovBlanket</span><span class="p">(</span><span class="n">Xi</span><span class="p">)</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span> <span class="p">]</span>  <span class="c1"># build MRF</span>
+
+  <span class="c1"># initialize priority queue of scores using e.g. heapq or sort</span>
+  <span class="n">reverse</span>  <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">priority</span><span class="p">[</span><span class="n">Xi</span><span class="p">],</span><span class="n">score</span><span class="p">(</span><span class="n">adj</span><span class="p">,</span><span class="n">Xi</span><span class="p">),</span><span class="n">Xi</span><span class="p">)</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">gm</span><span class="o">.</span><span class="n">X</span> <span class="p">]</span>
+  <span class="n">scores</span> <span class="o">=</span> <span class="n">SortedSet</span><span class="p">(</span> <span class="n">reverse</span> <span class="p">);</span> 
+  <span class="n">totalSize</span> <span class="o">=</span> <span class="mf">0.0</span>
+  <span class="c1">#_order = np.zeros((len(gm.X),)) #np.array([0 for Xi in gm.X])</span>
+  <span class="n">_order</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="nb">len</span><span class="p">(</span><span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+
+  <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gm</span><span class="o">.</span><span class="n">nvar</span><span class="p">):</span>
+    <span class="n">pick</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">Pi</span><span class="p">,</span><span class="n">Si</span><span class="p">,</span><span class="n">Xi</span> <span class="o">=</span> <span class="n">scores</span><span class="p">[</span><span class="n">pick</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">nExtra</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+      <span class="n">mx</span> <span class="o">=</span> <span class="n">bisect</span><span class="o">.</span><span class="n">bisect_right</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="p">(</span><span class="n">Pi</span><span class="p">,</span><span class="n">Si</span><span class="p">,</span><span class="n">gm</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>  <span class="c1"># get one past last equal-priority &amp; score vars</span>
+      <span class="n">pick</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">mx</span><span class="o">+</span><span class="n">nExtra</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">))</span>                  <span class="c1"># then pick a random &quot;near-best&quot; variable</span>
+      <span class="n">pick</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">pick</span><span class="p">)</span>
+      <span class="n">Pi</span><span class="p">,</span><span class="n">Si</span><span class="p">,</span><span class="n">Xi</span> <span class="o">=</span> <span class="n">scores</span><span class="p">[</span><span class="n">pick</span><span class="p">]</span>
+    <span class="k">del</span> <span class="n">scores</span><span class="p">[</span><span class="n">pick</span><span class="p">]</span>
+    <span class="n">_order</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">Xi</span><span class="o">.</span><span class="n">label</span>        <span class="c1"># write into order[idx] = Xi</span>
+    <span class="n">totalSize</span> <span class="o">+=</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">totalSize</span> <span class="o">&gt;</span> <span class="n">cutoff</span><span class="p">:</span> <span class="k">return</span> <span class="n">target</span><span class="p">,</span><span class="n">cutoff</span>  <span class="c1"># if worse than cutoff, quit with no changes to &quot;target&quot;</span>
+    <span class="n">fix</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">Xj</span> <span class="ow">in</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]:</span>
+      <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span> <span class="o">|=</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span>
+      <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span> <span class="o">-=</span> <span class="p">[</span><span class="n">Xi</span><span class="p">]</span>  <span class="c1"># TODO adj[Xj].remove(Xi) slightly faster but still unsupported by cython version</span>
+      <span class="n">fix</span> <span class="o">|=</span> <span class="n">adj</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span>   <span class="c1"># shouldn&#39;t need to fix as much for min-width?</span>
+    <span class="k">for</span> <span class="n">Xj</span> <span class="ow">in</span> <span class="n">fix</span><span class="p">:</span>
+      <span class="n">Pj</span><span class="p">,</span><span class="n">Sj</span><span class="p">,</span><span class="n">Xj</span> <span class="o">=</span> <span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span>
+      <span class="n">scores</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">])</span>
+      <span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">Pj</span><span class="p">,</span><span class="n">score</span><span class="p">(</span><span class="n">adj</span><span class="p">,</span><span class="n">Xj</span><span class="p">),</span><span class="n">Xj</span><span class="p">)</span>
+      <span class="n">scores</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">reverse</span><span class="p">[</span><span class="n">Xj</span><span class="p">])</span> <span class="c1"># add (Pj,score(adj,Xj),Xj) to heap &amp; update reverse lookup</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> 
+    <span class="n">target</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">target</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">_order</span><span class="p">))])</span>  <span class="c1"># make sure order is the right size</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gm</span><span class="o">.</span><span class="n">nvar</span><span class="p">):</span> <span class="n">target</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">=</span><span class="n">_order</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>   <span class="c1"># copy result if completed without quitting</span>
+  <span class="k">return</span> <span class="n">_order</span><span class="p">,</span><span class="n">totalSize</span>
+    
+
+<span class="k">class</span> <span class="nc">PseudoTree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Represent the pseudo-tree of a graphical model, given elimination ordering</span>
+
+<span class="sd">  Attributes:</span>
+<span class="sd">     pt.parent (list): pt.parent[x] gives the earliest parent of x in the pseudotree</span>
+<span class="sd">     pt.width (int): width (largest clique) in the tree</span>
+<span class="sd">     pt.depth (int): depth (longest chain of conditionally dependent variables) in the tree; = n for or-chain</span>
+<span class="sd">     pt.size  (float): total # of operations (sum of clique sizes) for the elimination process</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">elimOrder</span><span class="p">,</span> <span class="n">force_or</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">max_width</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Build the pseudotree. Set force_or=True to force an or-chain pseudotree.&quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">order</span>  <span class="o">=</span> <span class="n">elimOrder</span><span class="p">;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">parent</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span><span class="o">*</span><span class="nb">len</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">);</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">depth</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">size</span>  <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+    <span class="n">height</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">),),</span><span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">);</span>
+    <span class="n">priority</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">),),</span><span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">);</span>
+    <span class="n">priority</span><span class="p">[</span><span class="n">elimOrder</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">));</span>
+    <span class="k">if</span> <span class="n">max_width</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="n">max_width</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">);</span>
+
+    <span class="n">adj</span> <span class="o">=</span> <span class="p">[</span> <span class="n">model</span><span class="o">.</span><span class="n">markovBlanket</span><span class="p">(</span><span class="n">Xi</span><span class="p">)</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span> <span class="p">]</span>  <span class="c1"># build MRF</span>
+ 
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">):</span>
+      <span class="n">nbrs</span> <span class="o">=</span> <span class="n">adj</span><span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">();</span>      <span class="c1"># when we eliminate x,</span>
+      <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">nbrs</span><span class="p">:</span>      <span class="c1">#   we connect all its neighbors to each other</span>
+        <span class="n">adj</span><span class="p">[</span><span class="n">y</span><span class="p">]</span> <span class="o">|=</span> <span class="n">nbrs</span><span class="p">;</span>
+        <span class="n">adj</span><span class="p">[</span><span class="n">y</span><span class="p">]</span> <span class="o">-=</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">];</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">width</span>  <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">nbrs</span><span class="p">));</span>   <span class="c1"># update width statistic</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="o">&gt;</span> <span class="n">max_width</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">depth</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="n">inf</span><span class="p">,</span><span class="n">inf</span><span class="p">;</span> <span class="k">return</span>  <span class="c1"># give up?</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">size</span>  <span class="o">+=</span> <span class="n">nbrs</span><span class="o">.</span><span class="n">nrStatesDouble</span><span class="p">()</span>         <span class="c1">#   and total size statistic</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="n">force_or</span><span class="p">:</span>    <span class="c1"># and-or tree: find earliest eliminated neighbor </span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">nbrs</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">elimOrder</span><span class="p">[</span> <span class="nb">min</span><span class="p">(</span><span class="n">priority</span><span class="p">[</span><span class="n">nbrs</span><span class="o">.</span><span class="n">labels</span><span class="p">])</span> <span class="p">]</span> 
+        <span class="c1">#if self.parent[x] is not None: assert( priority[self.parent[x]] &gt; priority[x] )</span>
+      <span class="k">else</span><span class="p">:</span>               <span class="c1"># force or-tree (chain) pseudotree</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">elimOrder</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">elimOrder</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">];</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">height</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">height</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]],</span> <span class="n">height</span><span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">);</span>
+      <span class="c1">#ALT: if self.parent[x] is not None and height[x] &gt;= height[self.parent[x]]: height[self.parent[x]]=height[x]+1</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">depth</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">height</span><span class="p">);</span>
+
+  <span class="k">def</span> <span class="nf">orderDFS</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find an elimination order corresponding to a (reverse) depth-first traversal of the pseudotree&quot;&quot;&quot;</span>
+    <span class="n">children</span> <span class="o">=</span> <span class="p">[</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">order</span> <span class="p">]</span>
+    <span class="c1"># First find a DFS traversal of the pseudo-tree</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">):</span> <span class="n">children</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">+=</span> <span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">queue</span> <span class="o">=</span> <span class="p">[</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="kc">None</span> <span class="p">]</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">queue</span><span class="p">):</span>
+      <span class="n">new_order</span> <span class="o">+=</span> <span class="n">queue</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>            <span class="c1"># get next variable off queue</span>
+      <span class="n">queue</span> <span class="o">+=</span> <span class="n">children</span><span class="p">[</span> <span class="n">new_order</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">]</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>  <span class="c1"># append children to queue</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="nb">len</span><span class="p">(</span><span class="n">new_order</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">order</span><span class="p">)</span> <span class="p">)</span>
+    <span class="c1"># Now, re-order &quot;new_order&quot; to respect the priority structure if necessary:</span>
+    <span class="k">if</span> <span class="n">priority</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="n">new_order</span> <span class="o">=</span> <span class="p">[(</span><span class="n">priority</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">o</span><span class="p">,</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">new_order</span><span class="p">)</span> <span class="p">]</span>
+      <span class="n">new_order</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+      <span class="n">new_order</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span><span class="n">o</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="n">new_order</span><span class="p">]</span>  <span class="c1"># re-extract variable indices</span>
+    <span class="k">return</span> <span class="n">new_order</span> 
+
+
+<span class="c1">### TODO</span>
+<span class="c1"># Useful ordering operations?</span>
+<span class="c1">#  Reorder to minimize memory if cleared sequentially?  Calc such requirement?</span>
+<span class="c1">#  Reorder to root jtree at clique?</span>
+<span class="c1">#  Reorder to minimize depth?</span>
+<span class="c1">#  </span>
+
+
+
+
+<span class="c1"># TODO: function to return bayes ordering of factors from the model given topo ordering of X?</span>
+<span class="c1">#   var -&gt; priority; place each factor by last priority; </span>
+<span class="c1">#       if conflict, score entropy H(xi|xpa) to decide</span>
+<span class="c1">#    </span>
+<span class="k">def</span> <span class="nf">factorOrder</span><span class="p">(</span><span class="n">factors</span><span class="p">,</span> <span class="n">varOrder</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Return an order of factors for sampling given a variable order for sampling&quot;&quot;&quot;</span>
+  <span class="n">pri</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">varOrder</span><span class="p">]</span>
+  <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">varOrder</span><span class="p">):</span>          <span class="c1"># first, find position of each var in sampling order</span>
+    <span class="n">pri</span><span class="p">[</span><span class="n">x</span><span class="p">]</span><span class="o">=</span><span class="n">i</span>
+  <span class="n">factorOrder</span> <span class="o">=</span> <span class="p">[</span> <span class="n">Factor</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">varOrder</span> <span class="p">]</span>  <span class="c1"># fill order with blanks initially</span>
+  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span>
+    <span class="n">f_pri</span> <span class="o">=</span> <span class="nb">max</span><span class="p">([</span><span class="n">pri</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">])</span>  <span class="c1"># get last-sampled variable for this factor</span>
+    <span class="k">if</span> <span class="n">factorOrder</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span><span class="o">.</span><span class="n">nvar</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+      <span class="n">factorOrder</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span>               <span class="c1"># if first factor for this variable, save it</span>
+    <span class="k">else</span><span class="p">:</span>                                  <span class="c1"># o.w. take one with the lowest conditional entropy:</span>
+      <span class="k">if</span> <span class="n">ent</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>                   <span class="c1">#   (compute previous&#39; if necessary)</span>
+        <span class="n">ent</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span> <span class="o">=</span> <span class="n">factorOrder</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span><span class="o">.</span><span class="n">entropy</span><span class="p">()</span> <span class="o">-</span> <span class="n">factorOrder</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">([</span><span class="n">f_pri</span><span class="p">])</span><span class="o">.</span><span class="n">entropy</span><span class="p">()</span>
+      <span class="n">ent_new</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entropy</span><span class="p">()</span> <span class="o">-</span> <span class="n">f</span><span class="o">.</span><span class="n">sum</span><span class="p">([</span><span class="n">f_pri</span><span class="p">])</span><span class="o">.</span><span class="n">entropy</span><span class="p">()</span>  <span class="c1"># (and this factor&#39;s)</span>
+      <span class="k">if</span> <span class="n">ent_new</span> <span class="o">&lt;</span> <span class="n">ent</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]:</span>             <span class="c1">#   (keep whichever is lower)</span>
+        <span class="n">factorOrder</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span>
+        <span class="n">ent</span><span class="p">[</span><span class="n">f_pri</span><span class="p">]</span> <span class="o">=</span> <span class="n">ent_new</span>
+  <span class="k">return</span> <span class="n">factorOrder</span>
+  
+
+<span class="c1">################################################################################################</span>
+<span class="c1"># Basic sampling procedures: </span>
+<span class="c1"># Should sample from p(x) if it is a Bayes net with known topological ordering</span>
+<span class="c1"># Sample from some simple proposal based on the factors of p(x) if not.</span>
+
+<span class="c1">#</span>
+<span class="c1"># TODO: forward sample: draw each x; track normalization constant (in case non-norm&#39;d) &amp; scalar f&#39;ns; return x,w</span>
+<span class="c1">#   =&gt; rejection sampling?  importance sampling? others?</span>
+<span class="c1">#   extra param stores / filled with factors in order if not None?</span>
+
+<span class="c1"># sampling object?</span>
+<span class="c1">#   constructor takes factors, variable order if avail, and </span>
+<span class="c1">#    constructs ordered seq. of conditionals (by ref if possible) by selecting the largest</span>
+<span class="c1">#    factor containing only preceding vars &amp; conditioning if reqiured.</span>
+<span class="c1">#    =&gt; BN + order = factor sequence for sampling</span>
+<span class="c1">#    =&gt; BP beliefs + order = BP BN proposal</span>
+<span class="c1"># ?? do without actually conditioning? condition on the fly: </span>
+<span class="c1">#   compute the norm, sample, etc. manually in f&#39;n</span>
+
+<span class="c1">#def forwardSample(model, varOrder, factorOrder=None):</span>
+<span class="k">def</span> <span class="nf">sampleSequential</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">varOrder</span><span class="p">,</span> <span class="n">factorOrder</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Draw a configuration X sequentially from the model factors.</span>
+<span class="sd"> </span>
+<span class="sd">  Returns xs,logQ  (tuple): the sampled config and its log-probability under the sampling distribution</span>
+<span class="sd">  TODO: backwards from convention...</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="k">if</span> <span class="n">factorOrder</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="n">factorOrder</span> <span class="o">=</span> <span class="p">[]</span>
+  <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">factorOrder</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+    <span class="c1"># figure out an ordering of the factors in &quot;model&quot; to use &amp; store them in factorOrder:</span>
+    <span class="c1"># for each xi in varOrder:</span>
+    <span class="c1">#   from model, get factors with xi</span>
+    <span class="c1">#   from small-&gt;large (?) check if args all in &quot;done&quot;; if so, add to factorOrder</span>
+    <span class="c1">#   add xi to done</span>
+  <span class="c1">#x = [-1 for Xi in varOrder]         # storage for sample value</span>
+  <span class="n">s</span> <span class="o">=</span> <span class="p">{}</span>                              <span class="c1"># storage for sample value</span>
+  <span class="c1">#lnP, lnW = 0.0, 0.0                 # log p(x) of drawn sample &amp; log w(x) = f(x)/p(x)</span>
+  <span class="n">lnP</span> <span class="o">=</span> <span class="mf">0.0</span>                           <span class="c1"># log p(x) of drawn sample</span>
+  <span class="c1"># TODO: enumerate over varOrder instead; use factorOrder[i], then weight by factorOrd[i:] after</span>
+  <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">f</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">factorOrder</span><span class="p">):</span>  <span class="c1"># sample Xi from F[i | prev]:</span>
+    <span class="n">xi</span>  <span class="o">=</span> <span class="n">varOrder</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">Pxi</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">condition</span><span class="p">(</span> <span class="n">s</span> <span class="p">)</span>
+    <span class="c1"># TODO: check Pxi over one var, xi</span>
+    <span class="n">Zi</span>  <span class="o">=</span> <span class="n">Pxi</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">s</span><span class="p">[</span> <span class="n">xi</span> <span class="p">],</span> <span class="o">=</span> <span class="n">Pxi</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">Z</span><span class="o">=</span><span class="n">Zi</span><span class="p">)</span>  <span class="c1"># draw sample for i&#39;th variable</span>
+    <span class="n">lnP</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span> <span class="n">Pxi</span><span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="n">xi</span><span class="p">]]</span> <span class="o">/</span> <span class="n">Zi</span> <span class="p">)</span>
+  <span class="n">s_list</span> <span class="o">=</span> <span class="p">[</span> <span class="n">s</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">))</span> <span class="p">]</span>
+  <span class="k">return</span> <span class="n">s_list</span><span class="p">,</span> <span class="n">lnP</span>   <span class="c1"># TODO: backwards?</span>
+   
+
+
+
+
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../misc.html">Miscellaneous</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../csp.html">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

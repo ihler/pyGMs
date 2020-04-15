@@ -38,6 +38,7 @@ def loglikelihood(model, data, logZ=None):
 ##############################################
 def ising_grid(n=10,d=2,sigp=1.0,sigu=0.1):
   '''Return a basic Ising-like grid model.
+
      n    : size of grid (n x n), default 10
      d    : cardinality of variables (default 2)
      sigp : std dev of log pairwise potentials (non-diagonal terms; default 1.0)
@@ -56,8 +57,9 @@ def ising_grid(n=10,d=2,sigp=1.0,sigu=0.1):
 
 
 def boltzmann(theta_ij):
-  '''Create a pairwise graphical model from a matrix of parameter values.
-       p(x) \propto \exp( \sum_{i\neq j} \theta_{ij} xi xj + \sum_i \theta_{ii} xi )
+  '''Create a pairwise graphical model from a matrix of parameter values.  
+     .. math::
+       p(x) \propto \exp( \sum_{i \\neq j} \\theta_{ij} xi xj + \sum_i \\theta_{ii} xi )
      theta : (n,n) array of parameters
   '''
   n = theta_ij.shape[0]
@@ -68,4 +70,44 @@ def boltzmann(theta_ij):
     if i==j: factors[k] = gm.Factor([X[i]],[0,np.exp(theta[i,i])])
     else:    factors[k] = gm.Factor([X[i],X[j]],[0,0,0,np.exp(theta[i,j])])
   return factors
+
+
+################################################################################################
+# "Vectorize" the model parameters (log factor values), in overcomplete exponential family form.
+# "features" is a set of base factors used to determine the size & arrangement of the vector
+# "factors" are the model factors to conver to the vector representation
+# "theta" is the resulting log-vector
+
+# TODO: update to accept either a factor list or a graphical model
+# TODO: update to check for isLog flag
+
+def vectorize(factors, features, default=0.0):
+  """Return a vectorization of the model with "factors", under the specified set of base features"""
+  # TODO: better documentation
+  model = GraphModel(features, copy=False)  # create model with references to feature factors
+  idx = {};
+  t = 0;
+  for u in model.factors:
+    idx[u] = slice(t,t+u.numel());  # save location of this factor's features in the full vector
+    t += u.numel()
+  theta = np.zeros((t,))+default;           # allocate storage for vectorization
+  for f in factors:
+    u = model.factorsWithAll(f.vars)[0]; # get smallest feature set that can contain this factor
+    theta[idx[u]] += f.log().table.ravel(order=orderMethod);   # and add the factor to it
+  return theta
+
+def devectorize(theta, features, default=0.0, tolerance=0.0):
+  """Return a vectorization of the model with "factors", under the specified set of base features"""
+  t = 0;
+  factors = []
+  for u in features:
+    fnext = Factor(u.vars, theta[t:t+u.numel()]);
+    t += u.numel();
+    if (fnext-default).abs().sum() > tolerance:   # if any entries are different from the default,
+      factors.append( fnext.expIP() );            #   add them as factors  (exp?)
+  return factors
+
+################################################################################################
+
+
 

@@ -1,0 +1,479 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM.csp &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyGM.csp</h1><div class="highlight"><pre>
+<span></span><span class="c1"># CSP specific functions using pyGM</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">builtins</span> <span class="k">import</span> <span class="nb">range</span>
+
+
+<div class="viewcode-block" id="generate3SAT"><a class="viewcode-back" href="../../csp.html#pyGM.csp.generate3SAT">[docs]</a><span class="k">def</span> <span class="nf">generate3SAT</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span><span class="n">n</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generate factors corresponding to a random 3-SAT problem with n variables and alpha*n CNF clauses&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">random</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">alpha</span><span class="o">*</span><span class="n">n</span><span class="p">))</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="n">gm</span><span class="o">.</span><span class="n">Var</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)]</span> 
+    <span class="n">factors</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+        <span class="c1">#idx = [np.random.randint(n), np.random.randint(n), np.random.randint(n)]</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">),</span><span class="mi">3</span><span class="p">)</span>   <span class="c1"># select 3 different variables at random</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">Factor</span><span class="p">([</span><span class="n">X</span><span class="p">[</span><span class="n">idx</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span><span class="n">X</span><span class="p">[</span><span class="n">idx</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span><span class="n">X</span><span class="p">[</span><span class="n">idx</span><span class="p">[</span><span class="mi">2</span><span class="p">]]],</span><span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">cfg</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">2</span><span class="p">)]</span>
+        <span class="n">f</span><span class="p">[</span><span class="n">cfg</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">cfg</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">cfg</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span> <span class="o">=</span> <span class="mf">0.0</span>     <span class="c1"># CNF: rule out one configuration</span>
+        <span class="n">factors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">factors</span></div>
+
+
+
+
+<span class="c1"># create a function that evaluates the # of violated constraints:</span>
+<div class="viewcode-block" id="nViolated"><a class="viewcode-back" href="../../csp.html#pyGM.csp.nViolated">[docs]</a><span class="k">def</span> <span class="nf">nViolated</span><span class="p">(</span><span class="n">factors</span><span class="p">,</span><span class="n">x</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Evaluate the number of violated constraints in a set of 0/1 factors&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span> <span class="p">[</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">fij</span><span class="p">[</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">fij</span><span class="o">.</span><span class="n">vars</span><span class="p">)</span> <span class="p">]</span> <span class="k">for</span> <span class="n">fij</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">]</span> <span class="p">);</span></div>
+
+<span class="c1"># create a function that evaluates to 0 if constraints already violated</span>
+<div class="viewcode-block" id="OK"><a class="viewcode-back" href="../../csp.html#pyGM.csp.OK">[docs]</a><span class="k">def</span> <span class="nf">OK</span><span class="p">(</span><span class="n">factors</span><span class="p">):</span>   <span class="c1"># TODO: locally_satisfiable?  invert =&gt; isViolated?</span>
+    <span class="sd">&#39;&#39;&#39;Return 0 if constraints already violated; 1 otherwise&#39;&#39;&#39;</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span> <span class="p">[</span> <span class="n">fij</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="k">for</span> <span class="n">fij</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">]</span> <span class="p">);</span>   <span class="c1"># TODO: use any instead? (shortcut?)</span></div>
+
+
+<div class="viewcode-block" id="arcConsistent"><a class="viewcode-back" href="../../csp.html#pyGM.csp.arcConsistent">[docs]</a><span class="k">def</span> <span class="nf">arcConsistent</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">updated</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nvalid</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Update csp to arc consistency, from changes to updated (default: all)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">updated</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="n">updated</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">csp</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>                 <span class="c1"># default: propogate from all variables</span>
+    <span class="k">if</span> <span class="n">nvalid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="n">nvalid</span> <span class="o">=</span> <span class="p">[</span><span class="n">Xi</span><span class="o">.</span><span class="n">states</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">csp</span><span class="o">.</span><span class="n">X</span><span class="p">]</span>  <span class="c1"># default: all values initially possible</span>
+    <span class="k">while</span> <span class="n">updated</span><span class="p">:</span>
+        <span class="n">Xi</span> <span class="o">=</span> <span class="n">updated</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="n">factors</span> <span class="o">=</span> <span class="n">csp</span><span class="o">.</span><span class="n">withVariable</span><span class="p">(</span><span class="n">Xi</span><span class="p">)</span>
+        <span class="n">mu</span> <span class="o">=</span> <span class="n">prod</span><span class="p">(</span> <span class="n">f</span><span class="o">.</span><span class="n">maxmarginal</span><span class="p">([</span><span class="n">Xi</span><span class="p">])</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="n">mu</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">nvalid</span><span class="p">[</span><span class="n">Xi</span><span class="p">]:</span>
+            <span class="n">nvalid</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="o">=</span> <span class="n">mu</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>       <span class="c1"># record reduced domain for Xi</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span> <span class="n">f</span> <span class="o">*=</span> <span class="n">mu</span><span class="p">;</span>  <span class="c1"># push smaller domain back into factors</span>
+            <span class="n">updated</span><span class="o">.</span><span class="n">update</span><span class="p">(</span> <span class="n">csp</span><span class="o">.</span><span class="n">markovBlanket</span><span class="p">(</span><span class="n">Xi</span><span class="p">)</span> <span class="p">)</span>  <span class="c1"># and add neighbors to AC update set</span></div>
+        
+
+
+<span class="c1">############################################################</span>
+<div class="viewcode-block" id="condition"><a class="viewcode-back" href="../../csp.html#pyGM.csp.condition">[docs]</a><span class="k">def</span> <span class="nf">condition</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">Xi</span><span class="p">,</span> <span class="n">xi</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Make a copy of the CSP, then assert Xi=xi in that copy &amp; return it&quot;&quot;&quot;</span>
+    <span class="n">csp2</span> <span class="o">=</span> <span class="n">csp</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>            <span class="c1"># copy the model (to modify it later)</span>
+    <span class="n">csp2</span><span class="o">.</span><span class="n">condition</span><span class="p">({</span><span class="n">Xi</span><span class="p">:</span><span class="n">xi</span><span class="p">})</span>      <span class="c1"># condition on next assignment</span>
+    <span class="k">return</span> <span class="n">csp2</span></div>
+
+<div class="viewcode-block" id="consistent"><a class="viewcode-back" href="../../csp.html#pyGM.csp.consistent">[docs]</a><span class="k">def</span> <span class="nf">consistent</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">assign</span><span class="p">):</span>   <span class="c1"># check if csp is inconsistent (assumes already conditioned on &quot;assign&quot;)</span>
+    <span class="sd">&quot;&quot;&quot;Return False if CSP known inconsistent; True otherwise.</span>
+<span class="sd">    Note: assumes that &quot;assign&quot; has already been incorporated into the CSP&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">product</span><span class="p">([</span><span class="n">f</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">csp</span><span class="o">.</span><span class="n">factors</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="inference"><a class="viewcode-back" href="../../csp.html#pyGM.csp.inference">[docs]</a><span class="k">def</span> <span class="nf">inference</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">Xi</span><span class="p">,</span><span class="n">xi</span><span class="p">):</span>   <span class="c1"># do any desired updating of the CSP (e.g., maintain arc-consistency)</span>
+    <span class="sd">&quot;&quot;&quot;Update the CSP after setting Xi=xi, to reduce other variable domains if desired&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">csp</span>               <span class="c1"># here: none</span></div>
+
+<div class="viewcode-block" id="selectUnassignedVar"><a class="viewcode-back" href="../../csp.html#pyGM.csp.selectUnassignedVar">[docs]</a><span class="k">def</span> <span class="nf">selectUnassignedVar</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">assign</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the next variable to assign, given the CSP and current assignment &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: prioritize variables; many factors, few configurations, etc.</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">xi</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">assign</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">xi</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">return</span> <span class="n">csp</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="orderDomainValues"><a class="viewcode-back" href="../../csp.html#pyGM.csp.orderDomainValues">[docs]</a><span class="k">def</span> <span class="nf">orderDomainValues</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span><span class="n">Xi</span><span class="p">,</span><span class="n">assign</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a sequence of values to test for Xi in CSP with current assignment&quot;&quot;&quot;</span>
+    <span class="n">count</span><span class="p">,</span> <span class="n">valid</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">csp</span><span class="o">.</span><span class="n">factorsWith</span><span class="p">(</span><span class="n">Xi</span><span class="p">):</span> 
+        <span class="n">marg</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">marginal</span><span class="p">([</span><span class="n">Xi</span><span class="p">])</span>
+        <span class="n">count</span> <span class="o">+=</span> <span class="n">marg</span><span class="o">.</span><span class="n">t</span>
+        <span class="n">valid</span> <span class="o">*=</span> <span class="p">(</span><span class="n">marg</span><span class="o">.</span><span class="n">t</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">);</span>
+    <span class="k">return</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">count</span><span class="o">.</span><span class="n">t</span> <span class="o">*</span> <span class="n">valid</span><span class="p">))</span>  <span class="c1"># return configs with most available configurations 1st</span></div>
+    <span class="c1"># note: should leave off those with \prod c.maxmarginal(Xi) == 0  =&gt; known inconsistent</span>
+
+
+<div class="viewcode-block" id="backtrackingSearch"><a class="viewcode-back" href="../../csp.html#pyGM.csp.backtrackingSearch">[docs]</a><span class="k">def</span> <span class="nf">backtrackingSearch</span><span class="p">(</span><span class="n">constraints</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Backtracking search for list of constraint satisfaction factors.</span>
+<span class="sd">    Returns a solution if one exists; None otherwise.&quot;&quot;&quot;</span>
+    <span class="n">csp</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">GraphModel</span><span class="p">(</span><span class="n">constraints</span><span class="p">)</span>    <span class="c1"># initialize data structure with constraints (factors)</span>
+    <span class="c1"># TODO: make canonical (combine redundant constrants, create univariate factors)</span>
+    <span class="k">return</span> <span class="n">backtrackRecurse</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="p">[</span><span class="kc">None</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">csp</span><span class="o">.</span><span class="n">X</span><span class="p">])</span>    <span class="c1"># and start with no variables assigned</span></div>
+
+<div class="viewcode-block" id="backtrackRecurse"><a class="viewcode-back" href="../../csp.html#pyGM.csp.backtrackRecurse">[docs]</a><span class="k">def</span> <span class="nf">backtrackRecurse</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span><span class="n">assign</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Internal recursive function for backtracking search on CSP given partial assignment&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">xi</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">assign</span><span class="p">):</span> <span class="k">return</span> <span class="n">assign</span>  <span class="c1"># all Xi assigned =&gt; done!</span>
+    <span class="n">var</span> <span class="o">=</span> <span class="n">selectUnassignedVar</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">assign</span><span class="p">)</span>                <span class="c1"># if not: choose a variable to test</span>
+    <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">orderDomainValues</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span><span class="n">var</span><span class="p">,</span><span class="n">assign</span><span class="p">):</span>         <span class="c1">#   and run through its values:</span>
+        <span class="n">assign</span><span class="p">[</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+        <span class="n">csp2</span> <span class="o">=</span> <span class="n">condition</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span>  <span class="n">var</span><span class="p">,</span><span class="n">val</span><span class="p">)</span>     <span class="c1"># copy the CSP so we can modify it, set var=val,</span>
+        <span class="n">csp2</span> <span class="o">=</span> <span class="n">inference</span><span class="p">(</span><span class="n">csp2</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span><span class="n">val</span><span class="p">)</span>     <span class="c1">#   and do any desired work to reduce domains (FC,AC,...)</span>
+        <span class="k">if</span> <span class="n">consistent</span><span class="p">(</span><span class="n">csp2</span><span class="p">,</span> <span class="n">assign</span><span class="p">):</span>        <span class="c1"># if we can&#39;t prove failure, recurse to the next variable</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">backtrackRecurse</span><span class="p">(</span><span class="n">csp2</span><span class="p">,</span><span class="n">assign</span><span class="p">)</span>        <span class="c1">#  (forward in search)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="k">return</span> <span class="n">result</span>        <span class="c1"># if we got a solution, pass it upward</span>
+        <span class="c1">#otherwise, try next value for var</span>
+    <span class="n">assign</span><span class="p">[</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># if no values worked, unassign the variable</span>
+    <span class="k">return</span> <span class="kc">None</span>         <span class="c1"># and return failure upwards to backtrack</span></div>
+
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Or only:</span>
+<span class="sd">  node has current assignment {}</span>
+<span class="sd">  model conditioned on that assignment</span>
+<span class="sd">  when selected:</span>
+<span class="sd">    (1) do message passing &amp; update conditional bound</span>
+<span class="sd">    (2) select next variable for assignment &amp; precompute conditional bounds</span>
+<span class="sd">    (3) for each value, create new node with conditional model &amp; save with conditional bound </span>
+
+<span class="sd">Expanding: </span>
+<span class="sd">  and node: Select a variable from each connected component.</span>
+<span class="sd">  or node: </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="backtrackingSearch2"><a class="viewcode-back" href="../../csp.html#pyGM.csp.backtrackingSearch2">[docs]</a><span class="k">def</span> <span class="nf">backtrackingSearch2</span><span class="p">(</span><span class="n">constraints</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Backtracking search for list of constraint satisfaction factors.</span>
+<span class="sd">    Returns a solution if one exists; None otherwise.&quot;&quot;&quot;</span>
+    <span class="n">csp</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">GraphModel</span><span class="p">(</span><span class="n">constraints</span><span class="p">)</span>    <span class="c1"># initialize data structure with constraints (factors)</span>
+    <span class="n">csp</span><span class="o">.</span><span class="n">makeCanonical</span><span class="p">()</span>
+    <span class="n">queue</span> <span class="o">=</span> <span class="p">[</span> <span class="p">[]</span> <span class="p">]</span>                     <span class="c1"># initialize to a queue of [] (root node)</span>
+    <span class="n">assign</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">]</span>  <span class="c1"># initialize map: Xi = xhat[i] </span>
+    <span class="k">while</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="n">assign</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="n">var</span>  <span class="o">=</span> <span class="n">selectUnassignedVar</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span><span class="n">assign</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">orderDomainValues</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span><span class="n">var</span><span class="p">,</span><span class="n">assign</span><span class="p">)):</span>
+            <span class="n">assign2</span> <span class="o">=</span> <span class="n">assign</span><span class="p">[:]</span>
+            <span class="n">assign2</span><span class="p">[</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+            <span class="n">csp2</span> <span class="o">=</span> <span class="n">condition</span><span class="p">(</span><span class="n">csp</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span><span class="n">val</span><span class="p">)</span>
+            <span class="n">csp2</span> <span class="o">=</span> <span class="n">inference</span><span class="p">(</span><span class="n">csp2</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span><span class="n">val</span><span class="p">)</span>
+            
+        <span class="n">depth</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>         <span class="c1"># fixed order =&gt; indicates which variable is next</span>
+        <span class="n">var</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">)]</span> <span class="p">)</span>
+        <span class="c1">#for i in range(depth): val[x[i]]=node[i]  # condition on map vs short-list?</span>
+        <span class="n">ftmp</span> <span class="o">=</span> <span class="p">[</span> <span class="n">f</span><span class="o">.</span><span class="n">condition</span><span class="p">(</span><span class="n">var</span><span class="p">,</span><span class="n">node</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">factors</span> <span class="p">]</span>
+        <span class="c1"># TODO: make more efficient.  Store conditioned model instead of config? </span>
+        <span class="c1"># TODO: apply arc consistency if desired</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">OK</span><span class="p">(</span><span class="n">ftmp</span><span class="p">):</span> <span class="k">continue</span> <span class="c1"># if this node violates the constraints, go to next</span>
+        <span class="k">if</span> <span class="n">depth</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="n">xhat</span> <span class="o">=</span> <span class="n">node</span><span class="p">;</span> <span class="k">break</span><span class="p">;</span> <span class="c1"># if it&#39;s a solution, return it</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">depth</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">):</span>  <span class="c1"># otherwise add its children</span>
+            <span class="n">nextNode</span> <span class="o">=</span> <span class="n">node</span><span class="p">[:]</span>
+            <span class="n">nextNode</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+            <span class="n">queue</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">nextNode</span> <span class="p">)</span>
+    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">xhat</span><span class="p">),</span><span class="n">xhat</span></div>
+
+
+
+
+<span class="c1">#################################</span>
+<span class="c1"># Useful container abstractions #</span>
+<span class="c1">#################################</span>
+
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="k">class</span> <span class="nc">Queue</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">elements</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">()</span>
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+    <span class="k">def</span> <span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="o">.</span><span class="n">popleft</span><span class="p">()</span>
+
+<span class="kn">import</span> <span class="nn">heapq</span>
+<div class="viewcode-block" id="PriorityQueue"><a class="viewcode-back" href="../../csp.html#pyGM.csp.PriorityQueue">[docs]</a><span class="k">class</span> <span class="nc">PriorityQueue</span><span class="p">:</span>
+    <span class="sd">&#39;&#39;&#39;Priority queue wrapper; returns highest priority element.&#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">elements</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+    <span class="k">def</span> <span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">priority</span><span class="p">):</span>
+        <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="p">,</span> <span class="p">(</span><span class="o">-</span><span class="n">priority</span><span class="p">,</span> <span class="n">item</span><span class="p">))</span>
+    <span class="k">def</span> <span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">heapq</span><span class="o">.</span><span class="n">heappop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elements</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+
+
+<span class="c1">#################################</span>
+<span class="c1"># Min Conflicts Local Search:   #</span>
+<span class="c1">#################################</span>
+<div class="viewcode-block" id="minConflicts"><a class="viewcode-back" href="../../csp.html#pyGM.csp.minConflicts">[docs]</a><span class="k">def</span> <span class="nf">minConflicts</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">maxSteps</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Minimum conflicts local search for CSPs&quot;&quot;&quot;</span>
+  <span class="n">xhat</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">xi</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">];</span>
+  <span class="n">leastViolated</span> <span class="o">=</span> <span class="n">nViolated</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">factors</span><span class="p">,</span> <span class="n">xhat</span><span class="p">);</span>  <span class="c1"># initial # of constraint violations</span>
+  <span class="n">lastViolated</span>  <span class="o">=</span> <span class="n">leastViolated</span><span class="p">;</span>
+  <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">maxSteps</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">lastViolated</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="k">break</span><span class="p">;</span>    <span class="c1"># quit if found satisfying solution</span>
+    <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">:</span>              <span class="c1"># else run through each variable</span>
+      <span class="n">xihat</span> <span class="o">=</span> <span class="n">xhat</span><span class="p">[:];</span>              <span class="c1">#   (make a copy to xhat for modification)</span>
+      <span class="n">nv_old</span> <span class="o">=</span> <span class="n">nViolated</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">withVariable</span><span class="p">(</span><span class="n">xi</span><span class="p">),</span><span class="n">xihat</span><span class="p">);</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">xi</span><span class="o">.</span><span class="n">states</span><span class="p">):</span>    <span class="c1"># &amp; each possible value for it</span>
+        <span class="n">xihat</span><span class="p">[</span><span class="n">xi</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="p">;</span>              <span class="c1"># check how many constraints it violates</span>
+        <span class="n">nv_new</span> <span class="o">=</span> <span class="n">nViolated</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">withVariable</span><span class="p">(</span><span class="n">xi</span><span class="p">),</span><span class="n">xihat</span><span class="p">);</span>
+        <span class="c1">#if nViolated(xihat) &lt; leastViolated:</span>
+        <span class="k">if</span> <span class="n">lastViolated</span> <span class="o">-</span> <span class="n">nv_old</span> <span class="o">+</span> <span class="n">nv_new</span> <span class="o">&lt;</span> <span class="n">leastViolated</span><span class="p">:</span>
+          <span class="n">best</span> <span class="o">=</span> <span class="p">(</span><span class="n">xi</span><span class="p">,</span><span class="n">v</span><span class="p">);</span>            <span class="c1"># keep track of the best move so far</span>
+          <span class="c1">#leastViolated = nViolated(xihat);</span>
+          <span class="n">leastViolated</span> <span class="o">=</span> <span class="n">lastViolated</span> <span class="o">-</span> <span class="n">nv_old</span> <span class="o">+</span> <span class="n">nv_new</span>
+        <span class="c1"># TODO: if ==, pick one at random? nEqual ++, prob 1/nEqual?</span>
+    <span class="c1"># now, update the best variable-value pair and repeat</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Switching x</span><span class="si">{0}</span><span class="s2"> = </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">best</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">label</span><span class="p">,</span><span class="n">best</span><span class="p">[</span><span class="mi">1</span><span class="p">]));</span>
+    <span class="n">xhat</span><span class="p">[</span> <span class="n">best</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">]</span> <span class="o">=</span> <span class="n">best</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+    <span class="k">if</span> <span class="n">leastViolated</span> <span class="o">==</span> <span class="n">lastViolated</span><span class="p">:</span> <span class="k">break</span><span class="p">;</span>  <span class="c1"># no improvement = local optimum</span>
+    <span class="n">lastViolated</span> <span class="o">=</span> <span class="n">leastViolated</span><span class="p">;</span>             <span class="c1"># ow, keep track of new value</span>
+  <span class="k">return</span> <span class="p">(</span><span class="n">lastViolated</span><span class="o">==</span><span class="mi">0</span><span class="p">),</span> <span class="n">xhat</span></div>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">def minConflicts(X,factors, maxFlips):</span>
+<span class="sd">    # Min Conflicts Local Search:</span>
+<span class="sd">    # create a function that evaluates the # of violated constraints:</span>
+<span class="sd">    nViolated = lambda x: sum( [ 1.0 - fij[ tuple(x[v] for v in fij.vars) ] for fij in factors ] );</span>
+
+<span class="sd">    xhat = [np.random.randint(Xi.states) for Xi in X];</span>
+<span class="sd">    leastViolated = len(factors)+1;</span>
+<span class="sd">    lastViolated = leastViolated;</span>
+<span class="sd">    for step in range(maxFlips):</span>
+<span class="sd">        if nViolated(xhat) == 0: break; # quit if satisfying solution</span>
+<span class="sd">        for Xi in X:                    # else run through each variable</span>
+<span class="sd">            xihat = xhat[:];              #   (make a copy to xhat for modification)</span>
+<span class="sd">            for v in range(Xi.states):    # &amp; each possible value for it</span>
+<span class="sd">                xihat[Xi] = v;        # check # violated constraints &amp; keep best</span>
+<span class="sd">                if nViolated(xihat) &lt; leastViolated: best = (Xi,v); leastViolated = nViolated(xihat);</span>
+<span class="sd">        # now, update the best variable-value pair and repeat</span>
+<span class="sd">        #print &quot;Switching x{0} = {1}&quot;.format(best[0].label,best[1]);</span>
+<span class="sd">        xhat[ best[0] ] = best[1];</span>
+<span class="sd">        if nViolated(xhat)==lastViolated: break;  # no improvement = local optimum</span>
+<span class="sd">        lastViolated = nViolated(xhat)      # ow, keep track of new value</span>
+<span class="sd">        # check for local optimum ( = last # violated )?</span>
+<span class="sd">    #print &quot;Violated constraints: {0}&quot;.format(lastViolated)</span>
+<span class="sd">    return (lastViolated == 0)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="c1"># TODO: just use hill climbing on log(f+eps) instead?</span>
+
+<div class="viewcode-block" id="hillClimbing"><a class="viewcode-back" href="../../csp.html#pyGM.csp.hillClimbing">[docs]</a><span class="k">def</span> <span class="nf">hillClimbing</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">objectiveFn</span><span class="p">,</span> <span class="n">xInit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">maxSteps</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">maxValue</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s1">&#39;inf&#39;</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Basic greedy hill-climbing local search over configurations&quot;&quot;&quot;</span>
+    <span class="n">xCurrent</span> <span class="o">=</span> <span class="n">xInit</span> <span class="k">if</span> <span class="n">xInit</span> <span class="o">!=</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">Xi</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">X</span><span class="p">]</span>
+    <span class="n">xTemp</span>   <span class="o">=</span> <span class="n">xCurrent</span><span class="p">[:]</span>           <span class="c1"># make a copy for modification</span>
+    <span class="n">objLast</span> <span class="o">=</span> <span class="n">objectiveFn</span><span class="p">(</span><span class="n">xCurrent</span><span class="p">)</span>
+    <span class="n">xNext</span>   <span class="o">=</span> <span class="n">xCurrent</span>
+    <span class="n">objNext</span> <span class="o">=</span> <span class="n">objLast</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">xCurrent</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot; = &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">objNext</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">maxSteps</span><span class="p">):</span>
+        <span class="c1"># find the best variable and value to improve the objective:</span>
+        <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">X</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Xi</span><span class="o">.</span><span class="n">states</span><span class="p">):</span>
+                <span class="n">xTemp</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>      <span class="c1"># set Xi = v in temporary configuration</span>
+                <span class="n">objTemp</span> <span class="o">=</span> <span class="n">objectiveFn</span><span class="p">(</span><span class="n">xTemp</span><span class="p">)</span><span class="c1">#,xCurrent,[Xi],objLast) # TODO: know only Xi changed (assume additive?)</span>
+                <span class="k">if</span> <span class="n">objTemp</span> <span class="o">&gt;</span> <span class="n">objNext</span><span class="p">:</span> <span class="n">xNext</span><span class="p">,</span><span class="n">objNext</span> <span class="o">=</span> <span class="n">xTemp</span><span class="p">,</span><span class="n">objTemp</span><span class="p">;</span> 
+            <span class="n">xTemp</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="o">=</span> <span class="n">xCurrent</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="c1"># restore old value before looping</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; =&gt; &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">xNext</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot; = &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">objNext</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">objNext</span> <span class="o">==</span> <span class="n">objLast</span><span class="p">:</span> <span class="k">break</span><span class="p">;</span> <span class="c1"># local optimum =&gt; exit</span>
+        <span class="n">xCurrent</span> <span class="o">=</span> <span class="n">xNext</span>           <span class="c1"># ow, change current state to the best configuration found</span>
+        <span class="n">objLast</span> <span class="o">=</span> <span class="n">objNext</span>          <span class="c1"># and keep track of last step&#39;s value</span>
+    <span class="k">return</span> <span class="n">objLast</span><span class="p">,</span> <span class="n">xCurrent</span>       <span class="c1"># return objective &amp; configuration</span></div>
+
+<div class="viewcode-block" id="hillClimbing2"><a class="viewcode-back" href="../../csp.html#pyGM.csp.hillClimbing2">[docs]</a><span class="k">def</span> <span class="nf">hillClimbing2</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">objectiveFn</span><span class="p">,</span> <span class="n">xInit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">maxSteps</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">maxValue</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s1">&#39;inf&#39;</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Hill climbing local search, but with random walk on plateaus&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">random</span>
+    <span class="n">xCurrent</span> <span class="o">=</span> <span class="n">xInit</span> <span class="k">if</span> <span class="n">xInit</span> <span class="o">!=</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">Xi</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">X</span><span class="p">]</span>
+    <span class="n">objLast</span> <span class="o">=</span> <span class="n">objectiveFn</span><span class="p">(</span><span class="n">xCurrent</span><span class="p">)</span>
+    <span class="n">xNext</span>   <span class="o">=</span> <span class="p">[</span><span class="n">xCurrent</span><span class="p">]</span>
+    <span class="n">objNext</span> <span class="o">=</span> <span class="n">objLast</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">xCurrent</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot; = &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">objNext</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">maxSteps</span><span class="p">):</span>
+        <span class="c1"># find the best variable and value to improve the objective:</span>
+        <span class="k">for</span> <span class="n">Xi</span> <span class="ow">in</span> <span class="n">X</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Xi</span><span class="o">.</span><span class="n">states</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">v</span> <span class="o">==</span> <span class="n">xCurrent</span><span class="p">[</span><span class="n">Xi</span><span class="p">]:</span> <span class="k">continue</span>  <span class="c1"># skip current config</span>
+                <span class="n">xTemp</span> <span class="o">=</span> <span class="n">xCurrent</span><span class="p">[:]</span>    <span class="c1"># make a copy for modification</span>
+                <span class="n">xTemp</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>          <span class="c1"># set Xi = v in temporary configuration</span>
+                <span class="n">objTemp</span> <span class="o">=</span> <span class="n">objectiveFn</span><span class="p">(</span><span class="n">xTemp</span><span class="p">)</span>
+                <span class="k">if</span>   <span class="n">objTemp</span> <span class="o">&gt;</span>  <span class="n">objNext</span><span class="p">:</span> <span class="n">xNext</span><span class="p">,</span><span class="n">objNext</span> <span class="o">=</span> <span class="p">[</span><span class="n">xTemp</span><span class="p">],</span><span class="n">objTemp</span>
+                <span class="k">elif</span> <span class="n">objTemp</span> <span class="o">==</span> <span class="n">objNext</span><span class="p">:</span> <span class="n">xNext</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">xTemp</span><span class="p">)</span>  <span class="c1"># equal: add to list (plateau)</span>
+        <span class="n">xCurrent</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">xNext</span><span class="p">)</span> <span class="c1"># pick one of best states at random (plateau)</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; =&gt; &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">xCurrent</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot; = &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">objNext</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot; (among &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">xNext</span><span class="p">))</span><span class="o">+</span><span class="s2">&quot;)&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">objNext</span> <span class="o">&gt;=</span> <span class="n">maxValue</span><span class="p">):</span> <span class="k">break</span>                   <span class="c1"># found global optimum =&gt; exit</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">objNext</span> <span class="o">==</span> <span class="n">objLast</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">xNext</span><span class="p">)</span><span class="o">==</span><span class="mi">1</span><span class="p">):</span> <span class="k">break</span><span class="p">;</span> <span class="c1"># or local optimum =&gt; exit</span>
+        <span class="n">objLast</span> <span class="o">=</span> <span class="n">objNext</span>          <span class="c1"># otherwise, keep track of last step&#39;s value</span>
+        <span class="n">xNext</span> <span class="o">=</span> <span class="p">[</span><span class="n">xCurrent</span><span class="p">]</span>         <span class="c1"># include current (since we don&#39;t evaluate it in the loop)</span>
+    <span class="k">return</span> <span class="n">objLast</span><span class="p">,</span> <span class="n">xCurrent</span>       <span class="c1"># return objective &amp; configuration</span></div>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">def multipleRestart(localSearchFn, objectiveFn, maxSteps, maxRestarts, maxValue)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+
+<span class="c1">#################################</span>
+<span class="c1"># Backtracking Search (queue)   #</span>
+<span class="c1">#################################</span>
+<div class="viewcode-block" id="backtrack"><a class="viewcode-back" href="../../csp.html#pyGM.csp.backtrack">[docs]</a><span class="k">def</span> <span class="nf">backtrack</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">order</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Backtracking search for CSPs.  Use GraphModel container of constraint factors and search order &#39;order&#39;.&#39;&#39;&#39;</span>
+    <span class="n">queue</span> <span class="o">=</span> <span class="p">[</span> <span class="p">[]</span> <span class="p">]</span>                <span class="c1"># initialize to a queue of [] (root node)</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">]</span>    <span class="c1"># initialize map: xi = val[i]  (TODO: not used?)</span>
+    <span class="n">xhat</span> <span class="o">=</span> <span class="n">val</span><span class="p">[:]</span>                 <span class="c1"># make a copy for modification</span>
+    <span class="k">while</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="n">node</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="n">depth</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>         <span class="c1"># fixed order =&gt; indicates which variable is next</span>
+        <span class="n">var</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">)]</span> <span class="p">)</span>
+        <span class="c1">#for i in range(depth): val[x[i]]=node[i]  # condition on map vs short-list?</span>
+        <span class="n">ftmp</span> <span class="o">=</span> <span class="p">[</span> <span class="n">f</span><span class="o">.</span><span class="n">condition</span><span class="p">(</span><span class="n">var</span><span class="p">,</span><span class="n">node</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">factors</span> <span class="p">]</span>
+        <span class="c1"># TODO: make more efficient.  Store conditioned model instead of config? </span>
+        <span class="c1"># TODO: apply arc consistency if desired</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">OK</span><span class="p">(</span><span class="n">ftmp</span><span class="p">):</span> <span class="k">continue</span> <span class="c1"># if this node violates the constraints, go to next</span>
+        <span class="k">if</span> <span class="n">depth</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="n">xhat</span> <span class="o">=</span> <span class="n">node</span><span class="p">;</span> <span class="k">break</span><span class="p">;</span> <span class="c1"># if it&#39;s a solution, return it</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">depth</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">):</span>  <span class="c1"># otherwise add its children</span>
+            <span class="n">nextNode</span> <span class="o">=</span> <span class="n">node</span><span class="p">[:]</span>
+            <span class="n">nextNode</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+            <span class="n">queue</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">nextNode</span> <span class="p">)</span>
+    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">xhat</span><span class="p">),</span><span class="n">xhat</span></div>
+
+
+<span class="c1">###################################</span>
+<span class="c1"># Backtracking Search (recursive) #</span>
+<span class="c1">###################################</span>
+<span class="c1"># TODO: recursive version?; add arc consistency pass before OK check?</span>
+<span class="k">def</span> <span class="nf">backtracking</span><span class="p">(</span><span class="n">factors</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span><span class="n">val</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">OK</span><span class="p">(</span><span class="n">factors</span><span class="p">):</span> <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="astar"><a class="viewcode-back" href="../../csp.html#pyGM.csp.astar">[docs]</a><span class="k">def</span> <span class="nf">astar</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">order</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Basic A-star search for graphical model &#39;model&#39; using search order &#39;order&#39;.&#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">heur</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="n">config</span><span class="p">):</span>
+      <span class="k">return</span> <span class="nb">sum</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">condition</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">factors</span><span class="p">]);</span>
+    <span class="n">frontier</span> <span class="o">=</span> <span class="n">PriorityQueue</span><span class="p">()</span>
+    <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">({},</span> <span class="n">heur</span><span class="p">(</span><span class="n">model</span><span class="p">,{}))</span>
+    <span class="k">while</span> <span class="n">frontier</span><span class="p">:</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="n">frontier</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">current</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">):</span>   <span class="c1"># if a full configuration, done:</span>
+            <span class="k">break</span>
+        
+        <span class="n">Xi</span> <span class="o">=</span> <span class="n">order</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">current</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Xi</span><span class="o">.</span><span class="n">states</span><span class="p">):</span>
+            <span class="nb">next</span> <span class="o">=</span> <span class="n">current</span><span class="o">.</span><span class="n">copy</span><span class="p">();</span>
+            <span class="nb">next</span><span class="p">[</span><span class="n">Xi</span><span class="p">]</span> <span class="o">=</span> <span class="n">xi</span><span class="p">;</span>
+            <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">(</span> <span class="nb">next</span><span class="p">,</span> <span class="n">heur</span><span class="p">(</span><span class="n">model</span><span class="p">,</span><span class="nb">next</span><span class="p">)</span> <span class="p">)</span>
+            <span class="c1">#new_cost = cost_so_far[current] + graph.cost(current, next)</span>
+            <span class="c1">#if next not in cost_so_far or new_cost &lt; cost_so_far[next]:  # always true for GM</span>
+                <span class="c1">#cost_so_far[next] = new_cost</span>
+                <span class="c1">#priority = new_cost + heuristic(goal, next)</span>
+                <span class="c1">#frontier.push(next, priority)</span>
+                <span class="c1">#came_from[next] = current</span>
+    
+    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">logValue</span><span class="p">(</span><span class="n">current</span><span class="p">),</span> <span class="n">current</span> <span class="c1">#came_from, cost_so_far</span></div>
+
+
+
+<span class="c1">################</span>
+<span class="c1"># GDD search</span>
+<span class="c1">################</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">node has: a model, a LSE value (vector of values for each factor?) </span>
+<span class="sd">  if expanded, has conditioning var xi &amp; children for some / each value of xi &amp; LSE values for each child</span>
+
+<span class="sd">expand( node, xi ): for each factor in node.model with xi, compute the value of weighted elim *except* xi</span>
+<span class="sd">  (a f&#39;n of xi); unexpanded children have these values; </span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../misc.html">Miscellaneous</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../csp.html">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

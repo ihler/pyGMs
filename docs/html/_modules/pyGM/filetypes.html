@@ -1,0 +1,772 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM.filetypes &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyGM.filetypes</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">pyGM/filetypes.py</span>
+
+<span class="sd">Read / write methods for graphical model file types (UAI, WCSP, etc.)</span>
+
+<span class="sd">readUai  /  writeUai            : read/write UAI competition file format</span>
+<span class="sd">readEvidence10, readEvidence14  : read/write UAI, Ergo evidence formats (14: single evidence)</span>
+<span class="sd">readErgo                        : read Ergo Bayes Net format</span>
+<span class="sd">readWCSP /  writeWCSP           : read/write WCSP weighted CSP format</span>
+
+<span class="sd">Version 0.0.1 (2015-09-28)</span>
+<span class="sd">(c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span><span class="p">;</span>
+<span class="kn">from</span> <span class="nn">sortedcontainers</span> <span class="k">import</span> <span class="n">SortedSet</span> <span class="k">as</span> <span class="n">sset</span><span class="p">;</span>
+<span class="kn">from</span> <span class="nn">pyGM.factor</span> <span class="k">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">builtins</span> <span class="k">import</span> <span class="nb">range</span>
+
+
+
+<div class="viewcode-block" id="readFileByTokens"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readFileByTokens">[docs]</a><span class="k">def</span> <span class="nf">readFileByTokens</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">specials</span><span class="o">=</span><span class="p">[]):</span>
+  <span class="sd">&quot;&quot;&quot;Helper function for parsing pyGM file formats&quot;&quot;&quot;</span>
+  <span class="kn">import</span> <span class="nn">re</span>
+  <span class="n">spliton</span> <span class="o">=</span> <span class="s1">&#39;([\s&#39;</span><span class="o">+</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">specials</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;])&#39;</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fp</span><span class="p">:</span>
+      <span class="c1">#if line[-1]==&#39;\n&#39;: line = line[:-1]</span>
+      <span class="n">tok</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">spliton</span><span class="p">,</span><span class="n">line</span><span class="p">)</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">t</span><span class="o">.</span><span class="n">isspace</span><span class="p">()]</span>
+      <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tok</span><span class="p">:</span> <span class="k">yield</span> <span class="n">t</span></div>
+        <span class="c1">#t = t.strip()</span>
+        <span class="c1">#if t != &#39;&#39;:</span>
+        <span class="c1">#  yield t</span>
+
+
+<span class="k">def</span> <span class="nf">stripComments</span><span class="p">(</span><span class="n">gen</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;/*&#39;</span><span class="p">],</span><span class="n">end</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;*/&#39;</span><span class="p">]):</span>
+  <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">t</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">start</span><span class="p">:</span> 
+      <span class="k">yield</span> <span class="n">t</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">while</span> <span class="n">t</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">end</span><span class="p">:</span> 
+        <span class="n">t</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span> 
+
+
+<span class="c1">################################################################################################</span>
+<span class="c1"># Temporary functions for testing file parse speed, etc.</span>
+<span class="c1">################################################################################################</span>
+<div class="viewcode-block" id="readFileByTokensNEW"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readFileByTokensNEW">[docs]</a><span class="k">def</span> <span class="nf">readFileByTokensNEW</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">specials</span><span class="o">=</span><span class="p">[]):</span>
+  <span class="sd">&quot;&quot;&quot;Helper function for parsing pyGM file formats&quot;&quot;&quot;</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="n">tok0</span> <span class="o">=</span> <span class="n">fp</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+    <span class="k">yield</span> <span class="n">tok0</span>
+    <span class="n">txt</span> <span class="o">=</span> <span class="n">fp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+  <span class="c1">#for t in txt.split(): yield t</span>
+  <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">txt</span><span class="o">.</span><span class="n">split</span><span class="p">()):</span> <span class="k">yield</span> <span class="n">t</span></div>
+
+
+
+
+<div class="viewcode-block" id="readTEST"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readTEST">[docs]</a><span class="k">def</span> <span class="nf">readTEST</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read in a collection (list) of factors specified in UAI (2006-?) format</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; factor_list = readUai( &#39;path/filename.uai&#39; )</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>           <span class="c1"># store dimension (# of states) of the variables</span>
+  <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>               <span class="c1"># (local index over variables)</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># cliques (scopes) of the factors we read in</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># the factors themselves</span>
+
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;(),&#39;</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="nb">type</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span>                   <span class="c1"># read file type = Bayes,Markov,Sparse,etc</span>
+  <span class="n">nVar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>              <span class="c1"># get the number of variables</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">)]</span> <span class="c1">#   and their dimensions (states)</span>
+  <span class="n">nCliques</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>          <span class="c1"># get the number of cliques / factors</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span> 
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (size of clique)</span>
+    <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">)]</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span> 
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>          <span class="c1"># now read in the factor tables:</span>
+    <span class="n">tSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (# of entries in table = # of states in scope)</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]])</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="n">tSize</span> <span class="o">==</span> <span class="n">vs</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span> <span class="p">)</span>
+    <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span> <span class="k">for</span> <span class="n">tup</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tSize</span><span class="p">)],</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;C&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])))</span>
+    <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="n">orderMethod</span><span class="p">))</span>   <span class="c1"># use &#39;orderMethod&#39; from Factor class</span>
+
+  <span class="n">used</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nVar</span><span class="p">,))</span>
+  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span> <span class="n">used</span><span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">labels</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>              <span class="c1"># fill in singleton factors for any missing variables</span>
+    <span class="k">if</span> <span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">used</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span> <span class="n">factors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Factor</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">])],</span><span class="mf">1.0</span><span class="p">))</span>
+
+  <span class="k">return</span> <span class="n">factors</span></div>
+
+
+<span class="k">def</span> <span class="nf">readTEST2</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+    <span class="n">txt</span> <span class="o">=</span> <span class="n">fp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+  <span class="n">data</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">txt</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+  <span class="k">return</span> <span class="n">data</span>
+
+
+<span class="k">def</span> <span class="nf">readTEST3</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="n">filetype</span> <span class="o">=</span> <span class="n">fp</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fromfile</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span><span class="n">sep</span><span class="o">=</span><span class="s1">&#39; &#39;</span><span class="p">)</span>
+  <span class="n">nVar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="n">nVar</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int&#39;</span><span class="p">)</span> 
+  <span class="n">nCliques</span><span class="p">,</span><span class="n">gen</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">nVar</span><span class="o">+</span><span class="mi">1</span><span class="p">]),</span> <span class="n">nVar</span><span class="o">+</span><span class="mi">2</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">gen</span><span class="p">])</span>           <span class="c1">#   (size of clique)</span>
+    <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">gen</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">gen</span><span class="o">+</span><span class="n">cSize</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int&#39;</span><span class="p">)</span> 
+    <span class="n">gen</span> <span class="o">=</span> <span class="n">gen</span><span class="o">+</span><span class="n">cSize</span><span class="o">+</span><span class="mi">1</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>          <span class="c1"># now read in the factor tables:</span>
+    <span class="n">tSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">gen</span><span class="p">])</span>           <span class="c1">#   (# of entries in table = # of states in scope)</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]])</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="n">tSize</span> <span class="o">==</span> <span class="n">vs</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span> <span class="p">)</span>
+    <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">gen</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">gen</span><span class="o">+</span><span class="n">tSize</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+    <span class="n">gen</span> <span class="o">=</span> <span class="n">gen</span> <span class="o">+</span> <span class="n">tSize</span><span class="o">+</span><span class="mi">1</span>
+    <span class="c1">#tab = np.array([next(gen) for tup in range(tSize)],dtype=float,order=&#39;C&#39;).reshape(factorSize)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])))</span>
+    <span class="c1">#factors[c] = Factor(vs, np.array(tab,dtype=float,order=orderMethod))   # use &#39;orderMethod&#39; from Factor class</span>
+    <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">tab</span><span class="p">)</span>   <span class="c1"># use &#39;orderMethod&#39; from Factor class</span>
+  
+  <span class="n">used</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nVar</span><span class="p">,))</span>
+  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span> <span class="n">used</span><span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">labels</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>              <span class="c1"># fill in singleton factors for any missing variables</span>
+    <span class="k">if</span> <span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">used</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span> <span class="n">factors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Factor</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">])],</span><span class="mf">1.0</span><span class="p">))</span>
+
+  <span class="k">return</span> <span class="n">factors</span>
+
+
+
+
+  
+
+<span class="c1">################################################################################################</span>
+<span class="c1"># </span>
+<span class="c1">################################################################################################</span>
+
+
+
+<div class="viewcode-block" id="readUai"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readUai">[docs]</a><span class="k">def</span> <span class="nf">readUai</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read in a collection (list) of factors specified in UAI (2006-?) format</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; factor_list = readUai( &#39;path/filename.uai&#39; )</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>           <span class="c1"># store dimension (# of states) of the variables</span>
+  <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>               <span class="c1"># (local index over variables)</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># cliques (scopes) of the factors we read in</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># the factors themselves</span>
+
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;(),&#39;</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="nb">type</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span>                   <span class="c1"># read file type = Bayes,Markov,Sparse,etc</span>
+  <span class="n">nVar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>              <span class="c1"># get the number of variables</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">)]</span> <span class="c1">#   and their dimensions (states)</span>
+  <span class="n">nCliques</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>          <span class="c1"># get the number of cliques / factors</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span> 
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (size of clique)</span>
+    <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">)]</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span> 
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>          <span class="c1"># now read in the factor tables:</span>
+    <span class="n">tSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (# of entries in table = # of states in scope)</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="n">Var</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="n">tSize</span> <span class="o">==</span> <span class="n">vs</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span> <span class="p">)</span>
+    <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">tSize</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tSize</span><span class="p">):</span> <span class="n">tab</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">tab</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+    <span class="n">t2</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])))</span>
+    <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">t2</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="n">orderMethod</span><span class="p">))</span>   <span class="c1"># use &#39;orderMethod&#39; from Factor class</span>
+
+  <span class="n">used</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nVar</span><span class="p">,))</span>
+  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span> <span class="n">used</span><span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">labels</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>              <span class="c1"># fill in singleton factors for any missing variables</span>
+    <span class="k">if</span> <span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">used</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span> <span class="n">factors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Factor</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">])],</span><span class="mf">1.0</span><span class="p">))</span>
+
+  <span class="k">return</span> <span class="n">factors</span></div>
+
+
+
+<div class="viewcode-block" id="readEvidence10"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readEvidence10">[docs]</a><span class="k">def</span> <span class="nf">readEvidence10</span><span class="p">(</span><span class="n">evidence_file</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read UAI-2010 evidence file</span>
+
+<span class="sd">  The 2010 specification allowed multiple evidence configurations in the same file:</span>
+
+<span class="sd">  &gt;&gt;&gt;  evList = readEvidence10(&#39;path/file.uai.evid&#39;) </span>
+
+<span class="sd">  Returns a list of evidence configurations; evList[i] is a dictionary, { Xi : xi , ... } </span>
+<span class="sd">  indicating that variable Xi = value xi.</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="c1"># read evidence file: 2010 version (multiple evidences)</span>
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">evidence_file</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="n">nEvid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>             <span class="c1"># get number of evidences</span>
+  <span class="n">evid</span> <span class="o">=</span> <span class="p">[]</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nEvid</span><span class="p">):</span>             <span class="c1"># for each, create a blank dictionary</span>
+    <span class="n">evid</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">{}</span> <span class="p">)</span>
+    <span class="n">ev_length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>       <span class="c1"># read how many evidence variables</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ev_length</span><span class="p">):</span>       <span class="c1">#   and then that many (id,value) pairs</span>
+      <span class="n">var</span><span class="p">,</span><span class="n">val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)),</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+      <span class="n">evid</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">var</span><span class="p">]</span><span class="o">=</span><span class="n">val</span>
+  <span class="k">return</span> <span class="n">evid</span>  </div>
+
+  
+
+<div class="viewcode-block" id="readEvidence14"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readEvidence14">[docs]</a><span class="k">def</span> <span class="nf">readEvidence14</span><span class="p">(</span><span class="n">evidence_file</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read a UAI-2014 format evidence file</span>
+
+<span class="sd">  The 2014 specification allowed only one evidence configuration per file:</span>
+
+<span class="sd">  &gt;&gt;&gt; ev = readEvidence14(&#39;path/file.uai.evid&#39;) </span>
+
+<span class="sd">  Returns an evidence configuration as a dictionary, { Xi : xi , ... }, </span>
+<span class="sd">  indicating that variable Xi = value xi.</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="c1"># read evidence file: 2014 version (single evidence)</span>
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">evidence_file</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="n">evid</span> <span class="o">=</span> <span class="p">{}</span>                          <span class="c1"># create blank dictionary</span>
+  <span class="n">ev_length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>         <span class="c1"># read how many evidence variables</span>
+  <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ev_length</span><span class="p">):</span>         <span class="c1">#   and then that many (id,value) pairs</span>
+    <span class="n">var</span><span class="p">,</span><span class="n">val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)),</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+    <span class="n">evid</span><span class="p">[</span><span class="n">var</span><span class="p">]</span><span class="o">=</span><span class="n">val</span>
+  <span class="k">return</span> <span class="n">evid</span>  </div>
+
+
+<div class="viewcode-block" id="writeUai"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.writeUai">[docs]</a><span class="k">def</span> <span class="nf">writeUai</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">factors</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Write a list of factors to &lt;filename&gt; in the UAI competition format&quot;&quot;&quot;</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;MARKOV</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>               <span class="c1"># format type (TODO: add support)</span>
+
+    <span class="n">nvar</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span> <span class="n">factors</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">vars</span> <span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">factors</span><span class="p">))]</span> <span class="p">)</span><span class="o">.</span><span class="n">label</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nvar</span><span class="p">))</span>    <span class="c1"># number of variables in model</span>
+
+    <span class="n">dim</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nvar</span><span class="p">)]</span>     <span class="c1"># get variable dimensions / # states from factors</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="n">dim</span><span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">dim</span><span class="p">))</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># write dimensions of each variable</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>                     <span class="c1"># (extra line)</span>
+   
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">factors</span><span class="p">)));</span> <span class="c1"># number of factors</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span>                  <span class="c1"># + cliques</span>
+      <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">nvar</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">))</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>                     <span class="c1"># (extra line)</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span>                  <span class="c1"># factor tables</span>
+      <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">numel</span><span class="p">())</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">f</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;C&#39;</span><span class="p">)))</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+ 
+
+
+<div class="viewcode-block" id="readErgo"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readErgo">[docs]</a><span class="k">def</span> <span class="nf">readErgo</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot; Read in a Bayesian network (list of conditional probabilities) specified in ERGO format</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; factor_list,names,labels = readErgo( &#39;path/filename.erg&#39; )</span>
+
+<span class="sd">  See e.g. http://graphmod.ics.uci.edu/group/Ergo_file_format for details</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>           <span class="c1"># store dimension (# of states) of the variables</span>
+  <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>               <span class="c1"># (local index over variables)</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># cliques (scopes) of the factors we read in</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># the factors themselves</span>
+  <span class="c1">#</span>
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">stripComments</span><span class="p">(</span><span class="n">readFileByTokens</span><span class="p">(</span><span class="n">filename</span><span class="p">),</span> <span class="p">[</span><span class="s1">&#39;/*&#39;</span><span class="p">],[</span><span class="s1">&#39;*/&#39;</span><span class="p">])</span>   <span class="c1"># get token generator w/ comments</span>
+  <span class="n">nVar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>              <span class="c1"># get the number of variables</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">)]</span> <span class="c1">#   and their dimensions (states)</span>
+  <span class="n">nCliques</span> <span class="o">=</span> <span class="n">nVar</span>                    <span class="c1"># Bayes net =&gt; one clique per variable</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>         <span class="c1">#   and their variables / scopes</span>
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (number of parents)</span>
+    <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">)]</span><span class="o">+</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="c1"># (clique is Xc + parents)</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[</span> <span class="kc">None</span> <span class="p">]</span> <span class="o">*</span> <span class="n">nCliques</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>         <span class="c1"># now read in the conditional probabilities</span>
+    <span class="n">tSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (# of entries in table = # of states in scope)</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="n">Var</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="n">tSize</span> <span class="o">==</span> <span class="n">vs</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span> <span class="p">)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">tSize</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tSize</span><span class="p">):</span> <span class="n">tab</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+    <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">tab</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+    <span class="n">t2</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])))</span>
+    <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">t2</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="n">orderMethod</span><span class="p">))</span>   <span class="c1"># use &#39;orderMethod&#39; from Factor class</span>
+  <span class="c1">#</span>
+  <span class="n">names</span><span class="p">,</span><span class="n">labels</span> <span class="o">=</span> <span class="p">[],[]</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>
+    <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="p">)</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>
+    <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">[]</span> <span class="p">)</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]):</span>
+      <span class="n">labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="p">)</span>
+  <span class="c1">#</span>
+  <span class="k">return</span> <span class="n">factors</span><span class="p">,</span><span class="n">names</span><span class="p">,</span><span class="n">labels</span></div>
+
+
+
+
+<div class="viewcode-block" id="readWCSP"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readWCSP">[docs]</a><span class="k">def</span> <span class="nf">readWCSP</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot; Read in a weighted CSP (list of neg-log factors) specified in WCSP format</span>
+<span class="sd">  </span>
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; factor_list,name,upperbound = readWCSP( &#39;path/filename.wcsp&#39; )</span>
+<span class="sd"> </span>
+<span class="sd">  See e.g. http://graphmod.ics.uci.edu/group/WCSP_file_format</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="n">name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="n">nVar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="n">max_domain</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="n">nConstraints</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="n">ub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> 
+
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>
+    <span class="n">dims</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="p">)</span>
+  
+  <span class="n">constraints</span> <span class="o">=</span> <span class="p">[]</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nConstraints</span><span class="p">):</span>
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>             <span class="c1"># size of the clique, then clique variables</span>
+    <span class="n">cVars</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">):</span>
+      <span class="n">xi</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+      <span class="n">cVars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Var</span><span class="p">(</span><span class="n">xi</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">xi</span><span class="p">])</span> <span class="p">)</span>
+    <span class="n">defaultCost</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>     <span class="c1"># default cost for non-specified tuples</span>
+
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="n">cVars</span><span class="p">)</span>
+    <span class="n">constraints</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">defaultCost</span><span class="p">)</span> <span class="p">)</span>
+    <span class="n">pi</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span><span class="n">vs</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">cVars</span><span class="p">))</span>
+    <span class="n">ipi</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">pi</span><span class="p">)</span>                   <span class="c1"># get permutation mapping: file&#39;s order to sorted order</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">pi</span><span class="p">)):</span>         <span class="c1">#   (ipi = inverse permutation)</span>
+      <span class="n">ipi</span><span class="p">[</span><span class="n">pi</span><span class="p">[</span><span class="n">j</span><span class="p">]]</span> <span class="o">=</span> <span class="n">j</span>
+
+    <span class="n">nTuples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1"># of non-default-value tuples</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nTuples</span><span class="p">):</span>
+      <span class="n">tup</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">)</span> <span class="p">)</span>   <span class="c1"># read tuple</span>
+      <span class="n">mytup</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span> <span class="n">tup</span><span class="p">[</span><span class="n">ipi</span><span class="p">[</span><span class="n">j</span><span class="p">]]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ipi</span><span class="p">))</span> <span class="p">)</span> <span class="c1"># convert to sorted order</span>
+      <span class="n">constraints</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="n">mytup</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>                 <span class="c1"># and update factor</span>
+      
+  <span class="k">return</span> <span class="n">constraints</span><span class="p">,</span><span class="n">name</span><span class="p">,</span><span class="n">ub</span></div>
+
+
+
+<div class="viewcode-block" id="writeWCSP"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.writeWCSP">[docs]</a><span class="k">def</span> <span class="nf">writeWCSP</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">factors</span><span class="p">,</span> <span class="n">upper_bound</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_float</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Write &#39;filename&#39; in weighted CSP format </span>
+
+<span class="sd">  (see http://graphmod.ics.uci.edu/group/WCSP_file_format)</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="c1">#DONE: exploit sparsity (use most common value in table)</span>
+  <span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">Counter</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="n">nvar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span> <span class="n">factors</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">vars</span> <span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">factors</span><span class="p">))]</span> <span class="p">)</span><span class="o">.</span><span class="n">label</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">dmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span> <span class="n">factors</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">dims</span><span class="p">()</span> <span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">factors</span><span class="p">))]</span> <span class="p">))</span>
+    <span class="k">if</span> <span class="n">upper_bound</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="n">ub</span>   <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span> <span class="p">[</span><span class="n">factors</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">factors</span><span class="p">))</span> <span class="p">]</span> <span class="p">)))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">ub</span>   <span class="o">=</span> <span class="n">upper_bound</span>
+    
+    <span class="n">dim</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nvar</span><span class="p">)]</span>     <span class="c1"># get variable dimensions / # states from factors</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="n">dim</span><span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">states</span>
+
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>                 <span class="c1"># write preamble: name, #var, max_dim, #constraints, upper-bound</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; </span><span class="si">{:d}</span><span class="s2"> </span><span class="si">{:d}</span><span class="s2"> </span><span class="si">{:d}</span><span class="s2"> </span><span class="si">{:d}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nvar</span><span class="p">,</span><span class="n">dmax</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">factors</span><span class="p">),</span><span class="n">ub</span><span class="p">))</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">dim</span><span class="p">))</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># write dimensions of each variable</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span>                  <span class="c1"># write each factor:</span>
+      <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">)))</span>
+      <span class="n">cnt</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">table</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span>
+      <span class="n">default_value</span><span class="p">,</span><span class="n">n_default</span> <span class="o">=</span> <span class="n">cnt</span><span class="o">.</span><span class="n">most_common</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>                 <span class="c1"># first the variable IDs in the factor</span>
+        <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">))</span>
+      <span class="k">if</span> <span class="n">use_float</span><span class="p">:</span> <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:f}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">default_value</span><span class="p">))</span>      <span class="c1"># then the default vaule</span>
+      <span class="k">else</span><span class="p">:</span>         <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">default_value</span><span class="p">)))</span> <span class="c1">#  (float or int)</span>
+      <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{:d}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span><span class="o">-</span><span class="n">n_default</span><span class="p">))</span>  <span class="c1"># number of non-default values</span>
+      <span class="k">for</span> <span class="n">tup</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">ndindex</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">dims</span><span class="p">()):</span>          <span class="c1"># then the value of each tuple</span>
+        <span class="k">if</span> <span class="n">f</span><span class="p">[</span><span class="n">tup</span><span class="p">]</span> <span class="o">!=</span> <span class="n">default_value</span><span class="p">:</span>
+          <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">tup</span><span class="p">)))</span>
+          <span class="k">if</span> <span class="n">use_float</span><span class="p">:</span> <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; </span><span class="si">{:f}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="n">tup</span><span class="p">]))</span>
+          <span class="k">else</span><span class="p">:</span>         <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; </span><span class="si">{:d}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="n">tup</span><span class="p">])))</span></div>
+
+
+<div class="viewcode-block" id="readDSL"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readDSL">[docs]</a><span class="k">def</span> <span class="nf">readDSL</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read GeNIe XML DSL format Bayesian network&quot;&quot;&quot;</span>
+  <span class="c1"># TODO: check table entry order</span>
+  <span class="kn">import</span> <span class="nn">xml.etree.ElementTree</span> <span class="k">as</span> <span class="nn">ET</span>
+  <span class="n">tree</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+  <span class="n">root</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">getroot</span><span class="p">()</span>
+  <span class="n">nodes</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s1">&#39;nodes&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>   <span class="c1"># extract list of nodes in the model</span>
+  <span class="n">X</span> <span class="o">=</span> <span class="p">{}</span>
+  <span class="n">F</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">,</span><span class="n">names</span><span class="p">,</span><span class="n">labels</span> <span class="o">=</span> <span class="p">[],[],[],[],[]</span>
+  <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">nodes</span><span class="p">):</span>     <span class="c1"># get all the variable def&#39;s</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;cpt&#39;</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;decision&#39;</span><span class="p">:</span>  <span class="c1"># cpts &amp; decisions define a variable:</span>
+      <span class="n">name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
+      <span class="n">states</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">)</span>
+      <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> (</span><span class="si">{}</span><span class="s2">): </span><span class="si">{}</span><span class="s2"> states&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">states</span><span class="p">)))</span>
+      <span class="n">X</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">Var</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">states</span><span class="p">))</span> 
+      <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+      <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">states</span><span class="p">])</span>
+    <span class="c1"># get parents:</span>
+    <span class="n">par</span>  <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s1">&#39;parents&#39;</span><span class="p">)</span>
+    <span class="n">clique</span>  <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">par</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span> <span class="k">else</span> <span class="p">[</span><span class="n">X</span><span class="p">[</span><span class="n">pname</span><span class="p">]</span> <span class="k">for</span> <span class="n">pname</span> <span class="ow">in</span> <span class="n">par</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">()]</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;cpt&#39;</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;decision&#39;</span><span class="p">:</span> <span class="n">clique</span> <span class="o">=</span> <span class="n">clique</span> <span class="o">+</span> <span class="p">[</span><span class="n">X</span><span class="p">[</span><span class="n">name</span><span class="p">]]</span>
+    <span class="c1"># populate lists:</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;cpt&#39;</span><span class="p">:</span>
+      <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clique</span><span class="p">)</span>
+      <span class="n">vals</span>  <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s1">&#39;probabilities&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">vals</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">()])</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clique</span><span class="p">])))</span>
+      <span class="n">F</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Factor</span><span class="p">(</span><span class="n">VarSet</span><span class="p">(</span><span class="n">clique</span><span class="p">),</span><span class="n">tab</span><span class="p">)</span> <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;decision&#39;</span><span class="p">:</span>
+      <span class="n">D</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">clique</span> <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s1">&#39;utility&#39;</span><span class="p">:</span>
+      <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clique</span><span class="p">)</span>
+      <span class="n">vals</span>  <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s1">&#39;utilities&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">vals</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">()])</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clique</span><span class="p">])))</span>
+      <span class="n">U</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Factor</span><span class="p">(</span><span class="n">VarSet</span><span class="p">(</span><span class="n">clique</span><span class="p">),</span><span class="n">tab</span><span class="p">)</span> <span class="p">)</span>
+  <span class="c1"># return model</span>
+  <span class="k">return</span> <span class="n">F</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">,</span><span class="n">names</span><span class="p">,</span><span class="n">labels</span></div>
+
+
+
+<div class="viewcode-block" id="readLimid"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readLimid">[docs]</a><span class="k">def</span> <span class="nf">readLimid</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read in a LIMID file (Maua format)</span>
+
+<span class="sd">  Example: get CPTs for chance nodes C, uniform policies D, and utilities U:</span>
+
+<span class="sd">  &gt;&gt;&gt;  C,D,U = readLimid(filename) </span>
+
+<span class="sd">  See e.g. https://github.com/denismaua/kpu-pp</span>
+<span class="sd">  TODO: may have an error in variable orderings?  Hard to tell from Denis&#39; page.</span>
+<span class="sd">  TODO: seems to expect multiplicative utility functions?</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>           <span class="c1"># store dimension (# of states) of the variables</span>
+  <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>               <span class="c1"># (local index over variables)</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># cliques (scopes) of the factors we read in</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># the factors themselves</span>
+
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="nb">type</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="k">if</span> <span class="nb">type</span><span class="o">==</span><span class="s1">&#39;/*&#39;</span><span class="p">:</span> 
+    <span class="k">while</span> <span class="nb">type</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">:]</span><span class="o">!=</span><span class="s1">&#39;*/&#39;</span><span class="p">:</span> <span class="nb">type</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+    <span class="nb">type</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="k">if</span> <span class="nb">type</span> <span class="o">!=</span> <span class="s1">&#39;LIMID&#39;</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Not LIMID file?&#39;</span><span class="p">)</span>
+  <span class="n">nC</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="n">nD</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+  <span class="n">nU</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nC</span><span class="o">+</span><span class="n">nD</span><span class="p">):</span>             <span class="c1">#   and their dimensions (states)</span>
+    <span class="n">dims</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="p">)</span>
+  <span class="n">nCliques</span> <span class="o">=</span> <span class="n">nC</span> <span class="o">+</span> <span class="n">nD</span> <span class="o">+</span> <span class="n">nU</span>            <span class="c1"># one CPT per chance node </span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nCliques</span><span class="p">):</span>          <span class="c1">#</span>
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1"># number of parents</span>
+    <span class="k">if</span> <span class="n">c</span> <span class="o">&lt;</span> <span class="n">nC</span> <span class="o">+</span> <span class="n">nD</span><span class="p">:</span> 
+      <span class="n">cliques</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">c</span><span class="p">])])</span>  <span class="c1"># CPT for chance node c or decision node d; else utility</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">cliques</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>             
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">):</span>           <span class="c1">#   get list of parents</span>
+      <span class="n">v</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+      <span class="n">cliques</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Var</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">])</span> <span class="p">)</span>
+    <span class="n">cliques</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>   <span class="c1"># !!!! can&#39;t tell if this is right !!!</span>
+    <span class="c1">#print cliques[-1]</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">nCliques</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nC</span><span class="p">,</span><span class="n">nC</span><span class="o">+</span><span class="n">nD</span><span class="p">):</span> <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">],</span><span class="mf">1.0</span><span class="o">/</span><span class="n">dims</span><span class="p">[</span><span class="n">c</span><span class="p">]);</span>  <span class="c1"># uniform initial policy</span>
+  <span class="n">CpU</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">nC</span><span class="p">)</span>
+  <span class="n">CpU</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">nC</span><span class="o">+</span><span class="n">nD</span><span class="p">,</span><span class="n">nCliques</span><span class="p">))</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">CpU</span><span class="p">:</span>                      <span class="c1"># now read in the factor tables:</span>
+    <span class="n">tSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (# of entries in table = # of states in scope)</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span>
+    <span class="c1">#print cliques[c], &#39; =&gt; &#39;, vs</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="n">tSize</span> <span class="o">==</span> <span class="n">vs</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span> <span class="p">)</span>
+    <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span>        <span class="c1"># add a blank factor</span>
+    <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span> <span class="k">for</span> <span class="n">tup</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tSize</span><span class="p">)],</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;C&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+    <span class="n">t2</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]])))</span>
+    <span class="n">factors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span><span class="o">.</span><span class="n">table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">t2</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;F&#39;</span><span class="p">)</span>
+
+  <span class="k">return</span> <span class="n">factors</span><span class="p">[:</span><span class="n">nC</span><span class="p">],</span><span class="n">factors</span><span class="p">[</span><span class="n">nC</span><span class="p">:</span><span class="n">nC</span><span class="o">+</span><span class="n">nD</span><span class="p">],</span><span class="n">factors</span><span class="p">[</span><span class="n">nC</span><span class="o">+</span><span class="n">nD</span><span class="p">:]</span></div>
+
+
+
+<div class="viewcode-block" id="Limid2MMAP"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.Limid2MMAP">[docs]</a><span class="k">def</span> <span class="nf">Limid2MMAP</span><span class="p">(</span><span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Convert LIMID factors into MMAP factors &amp; query variable list</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; C,D,U = readLimid(filename)</span>
+<span class="sd">  &gt;&gt;&gt; factors,query = Limid2MMAP(C,D,U) </span>
+
+<span class="sd">  See also readLimid().</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">nC</span><span class="p">,</span><span class="n">nD</span><span class="p">,</span><span class="n">nU</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">C</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">D</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">U</span><span class="p">)</span>
+  <span class="kn">from</span> <span class="nn">.graphmodel</span> <span class="k">import</span> <span class="n">GraphModel</span>
+  <span class="n">model</span> <span class="o">=</span> <span class="n">GraphModel</span><span class="p">(</span> <span class="n">C</span> <span class="o">+</span> <span class="p">[</span><span class="n">Factor</span><span class="p">(</span><span class="n">d</span><span class="p">,</span><span class="mf">1.</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">D</span><span class="p">]</span> <span class="p">)</span>  <span class="c1"># &quot;base&quot; model of chance &amp; decision f&#39;ns</span>
+  <span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="nb">max</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">])</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">X</span><span class="p">:</span> <span class="n">X</span><span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">=</span><span class="n">x</span>
+  <span class="n">nxt</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+  <span class="n">DD</span><span class="p">,</span><span class="n">Q</span> <span class="o">=</span> <span class="p">[],[]</span>
+
+  <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">D</span><span class="p">:</span>
+    <span class="n">par</span><span class="p">,</span> <span class="n">dd</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="n">d</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="n">d</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>   <span class="c1"># decision var is last in list</span>
+    <span class="k">if</span> <span class="n">par</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span>   <span class="c1"># no parents =&gt; decision variable = map variable</span>
+      <span class="c1">#DD.append( D[d] )     # don&#39;t need to keep factor; do mark variable in query</span>
+      <span class="n">Q</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dd</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+      <span class="k">continue</span>              <span class="c1"># otherwise, create one map var per config, for that policy</span>
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()):</span>
+      <span class="n">X</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Var</span><span class="p">(</span><span class="n">nxt</span><span class="p">,</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="p">)</span>           <span class="c1"># create MAP var for policy</span>
+      <span class="n">cliq</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">par</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">],</span><span class="n">X</span><span class="p">[</span><span class="n">nxt</span><span class="p">]]</span>    <span class="c1"># factor includes parents, policy var, and final decision</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span> <span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nrStates</span><span class="p">(),)</span> <span class="o">+</span> <span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">,</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="p">)</span>
+      <span class="n">tab</span><span class="p">[</span><span class="n">p</span><span class="p">,:,:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span>           <span class="c1"># for par config p, final decision = policy var; ow anything OK</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">tab</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span> <span class="n">par</span><span class="o">.</span><span class="n">dims</span><span class="p">()</span> <span class="o">+</span> <span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">,</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="p">)</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">tab</span><span class="p">)</span>                       <span class="c1"># now build the factor (may require permuting axes)</span>
+      <span class="n">DD</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Factor</span><span class="p">(</span><span class="n">VarSet</span><span class="p">(</span><span class="n">cliq</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliq</span><span class="p">])))</span> <span class="p">)</span> <span class="p">)</span>
+      <span class="n">Q</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nxt</span><span class="p">)</span>                               <span class="c1"># policy var is part of the MMAP query</span>
+      <span class="n">nxt</span> <span class="o">+=</span> <span class="mi">1</span>
+  <span class="k">if</span> <span class="kc">True</span><span class="p">:</span> <span class="c1">#latent == &#39;joint&#39;:</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="n">Var</span><span class="p">(</span><span class="n">nxt</span><span class="p">,</span> <span class="n">nU</span><span class="p">)</span>
+    <span class="n">UU</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span><span class="o">*</span><span class="n">nU</span>
+    <span class="c1">#fZ = Factor(z, 1.)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">u</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">U</span><span class="p">):</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Utility </span><span class="si">{}</span><span class="s2"> has negative values!&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">u</span><span class="p">)))</span>
+      <span class="n">UU</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">u</span><span class="o">.</span><span class="n">vars</span><span class="p">]</span><span class="o">+</span><span class="p">[</span><span class="n">z</span><span class="p">],</span> <span class="mf">1.</span> <span class="p">)</span>   <span class="c1"># go thru constructor to ensure orderMethod match</span>
+      <span class="n">newarr</span> <span class="o">=</span> <span class="n">UU</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">table</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span> <span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">vars</span><span class="o">.</span><span class="n">nrStates</span><span class="p">(),</span><span class="n">nU</span><span class="p">)</span> <span class="p">)</span>
+      <span class="n">newarr</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">table</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+      <span class="n">UU</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">u</span><span class="o">.</span><span class="n">vars</span><span class="p">]</span><span class="o">+</span><span class="p">[</span><span class="n">z</span><span class="p">],</span> <span class="n">newarr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">UU</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">table</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="p">)</span>
+  <span class="k">else</span><span class="p">:</span>   <span class="c1"># latent == &#39;chain&#39; ??</span>
+    <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nU</span><span class="p">):</span>
+      <span class="c1"># TODO: complete &quot;chain&quot; version of latent variable</span>
+      <span class="n">zi</span> <span class="o">=</span> <span class="n">Var</span><span class="p">(</span><span class="n">nxt</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+      <span class="c1"># add factor p(zi|zi-1)*U</span>
+      
+  <span class="k">return</span> <span class="n">C</span><span class="o">+</span><span class="n">DD</span><span class="o">+</span><span class="n">UU</span><span class="p">,</span> <span class="n">Q</span></div>
+    
+
+<div class="viewcode-block" id="readLimidCRA"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readLimidCRA">[docs]</a><span class="k">def</span> <span class="nf">readLimidCRA</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Read in a LIMID file specified by our format with Charles River.</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; fChance,fDecision,fUtil = readLimidCRA( &#39;path/filename.uai&#39; )</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>           <span class="c1"># store dimension (# of states) of the variables</span>
+  <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>               <span class="c1"># (local index over variables)</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># cliques (scopes) of the factors we read in</span>
+  <span class="n">factors</span> <span class="o">=</span> <span class="p">[]</span>        <span class="c1"># the factors themselves</span>
+
+  <span class="n">gen</span> <span class="o">=</span> <span class="n">readFileByTokens</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;(),&#39;</span><span class="p">)</span>   <span class="c1"># get token generator for the UAI file</span>
+  <span class="nb">type</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span>                   <span class="c1"># read file type = Bayes,Markov,Sparse,etc</span>
+  <span class="n">nVar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>              <span class="c1"># get the number of variables</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>              <span class="c1">#   and their dimensions (states)</span>
+    <span class="n">dims</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span> <span class="p">)</span>
+  <span class="n">nChance</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>          <span class="c1"># get the number of chance node factors</span>
+  <span class="n">nDecision</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>        <span class="c1"># get the number of decision variables (cliques)</span>
+  <span class="n">nUtil</span>   <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>          <span class="c1"># get the number of utility functions</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nChance</span><span class="o">+</span><span class="n">nDecision</span><span class="o">+</span><span class="n">nUtil</span><span class="p">):</span>  <span class="c1">#   get each clique&#39;s scopes</span>
+    <span class="n">cSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (size of clique)</span>
+    <span class="n">cliques</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cSize</span><span class="p">):</span>           <span class="c1">#   ( + list of variable ids)</span>
+      <span class="n">v</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>
+      <span class="n">cliques</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Var</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">v</span><span class="p">])</span> <span class="p">)</span>
+    <span class="c1">#print cliques[-1]</span>
+  <span class="n">chance</span><span class="o">=</span><span class="n">cliques</span><span class="p">[:</span><span class="n">nChance</span><span class="p">]</span>
+  <span class="n">decision</span><span class="o">=</span><span class="n">cliques</span><span class="p">[</span><span class="n">nChance</span><span class="p">:</span><span class="n">nChance</span><span class="o">+</span><span class="n">nDecision</span><span class="p">]</span>
+  <span class="n">util</span><span class="o">=</span><span class="n">cliques</span><span class="p">[</span><span class="n">nChance</span><span class="o">+</span><span class="n">nDecision</span><span class="p">:]</span>
+  <span class="n">cliques</span> <span class="o">=</span> <span class="n">chance</span> <span class="o">+</span> <span class="n">util</span>            <span class="c1"># now update to only read chance &amp; util f&#39;ns</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nChance</span><span class="o">+</span><span class="n">nUtil</span><span class="p">):</span>          <span class="c1"># now read in the factor tables:</span>
+    <span class="n">tSize</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">))</span>           <span class="c1">#   (# of entries in table = # of states in scope)</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span>
+    <span class="k">assert</span><span class="p">(</span> <span class="n">tSize</span> <span class="o">==</span> <span class="n">vs</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span> <span class="p">)</span>
+    <span class="n">factors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Factor</span><span class="p">(</span><span class="n">vs</span><span class="p">))</span>       <span class="c1"># add a blank factor</span>
+    <span class="n">factorSize</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="k">else</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span> <span class="k">for</span> <span class="n">tup</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tSize</span><span class="p">)],</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;C&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">factorSize</span><span class="p">)</span>
+    <span class="n">t2</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliques</span><span class="p">[</span><span class="n">c</span><span class="p">]])))</span>
+    <span class="n">factors</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">table</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">t2</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="n">orderMethod</span><span class="p">)</span>   <span class="c1"># use &#39;orderMethod&#39; from Factor class</span>
+
+  <span class="n">used</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nVar</span><span class="p">,))</span>
+  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">factors</span><span class="p">:</span> <span class="n">used</span><span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">labels</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nVar</span><span class="p">):</span>              <span class="c1"># fill in singleton factors for any missing variables</span>
+    <span class="k">if</span> <span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">used</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span> <span class="n">factors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Factor</span><span class="p">([</span><span class="n">Var</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">])],</span><span class="mf">1.0</span><span class="p">))</span>
+
+  <span class="k">return</span> <span class="n">factors</span><span class="p">[:</span><span class="n">nChance</span><span class="p">],</span><span class="n">decision</span><span class="p">,</span><span class="n">factors</span><span class="p">[</span><span class="n">nChance</span><span class="p">:]</span></div>
+
+
+<div class="viewcode-block" id="LimidCRA2MMAP"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.LimidCRA2MMAP">[docs]</a><span class="k">def</span> <span class="nf">LimidCRA2MMAP</span><span class="p">(</span><span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;Convert CRA LIMID factors into MMAP factors &amp; query variable list  (Not Implemented)</span>
+
+<span class="sd">  Example:</span>
+
+<span class="sd">  &gt;&gt;&gt; factors,query = LimidCRA2MMAP(C,D,U) </span>
+
+<span class="sd">  See also readLimidCRA().</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">X</span><span class="o">=</span><span class="p">{}</span>
+  <span class="n">Q</span><span class="o">=</span><span class="p">[]</span>
+  <span class="n">DD</span><span class="o">=</span><span class="p">[]</span>
+  <span class="n">nC</span><span class="p">,</span><span class="n">nD</span><span class="p">,</span><span class="n">nU</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">C</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">D</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">U</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">D</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">c</span><span class="p">:</span>
+      <span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">=</span><span class="n">v</span>
+  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">C</span><span class="o">+</span><span class="n">U</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+      <span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">=</span><span class="n">v</span>
+  <span class="n">nxt</span> <span class="o">=</span> <span class="mi">1</span><span class="o">+</span><span class="nb">max</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span> 
+  <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">D</span><span class="p">)):</span>        <span class="c1"># now run through each decision &amp; create MMAP policy vars</span>
+    <span class="n">dd</span> <span class="o">=</span> <span class="n">D</span><span class="p">[</span><span class="n">d</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>                <span class="c1"># ??? Last variable is decision ID?</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">dd</span> <span class="ow">in</span> <span class="n">X</span><span class="p">:</span> <span class="k">continue</span>     <span class="c1"># No probability or utility depends on the decision?</span>
+    <span class="n">par</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">([</span><span class="n">X</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">D</span><span class="p">[</span><span class="n">d</span><span class="p">][:</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span> 
+    <span class="c1">#print(&quot;Processing &quot;,dd,&quot; parents &quot;,par)</span>
+    <span class="k">if</span> <span class="n">par</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span>   <span class="c1"># no parents =&gt; decision variable = map variable</span>
+      <span class="c1">#DD.append( D[d] )     # don&#39;t need to keep factor; do mark variable in query</span>
+      <span class="n">Q</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dd</span><span class="p">)</span>
+      <span class="k">continue</span>              <span class="c1"># otherwise, create one map var per config, for that policy</span>
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nrStates</span><span class="p">()):</span>
+      <span class="n">X</span><span class="p">[</span><span class="n">nxt</span><span class="p">]</span> <span class="o">=</span> <span class="n">Var</span><span class="p">(</span><span class="n">nxt</span><span class="p">,</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span>    <span class="c1"># create MAP var for policy</span>
+      <span class="c1">#print(&quot;  new query var &quot;,nxt)</span>
+      <span class="n">cliq</span> <span class="o">=</span> <span class="n">D</span><span class="p">[</span><span class="n">d</span><span class="p">][:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>  
+      <span class="n">cliq</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span> <span class="p">[</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">],</span><span class="n">X</span><span class="p">[</span><span class="n">nxt</span><span class="p">]]</span> <span class="p">)</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span> <span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nrStates</span><span class="p">(),)</span> <span class="o">+</span> <span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">,</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span> <span class="p">)</span>
+      <span class="n">tab</span><span class="p">[</span><span class="n">p</span><span class="p">,:,:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">dd</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">)</span>
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">tab</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">states</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliq</span><span class="p">)</span> <span class="p">)</span> 
+      <span class="n">tab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">tab</span><span class="p">)</span>
+      <span class="n">DD</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">Factor</span><span class="p">(</span><span class="n">VarSet</span><span class="p">(</span><span class="n">cliq</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">tab</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cliq</span><span class="p">])))</span> <span class="p">)</span> <span class="p">)</span>
+      <span class="n">Q</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">nxt</span><span class="p">])</span>
+      <span class="n">nxt</span> <span class="o">+=</span> <span class="mi">1</span>
+  <span class="n">z</span> <span class="o">=</span> <span class="n">Var</span><span class="p">(</span><span class="n">nxt</span><span class="p">,</span> <span class="n">nU</span><span class="p">)</span>
+  <span class="n">fZ</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nU</span><span class="p">):</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="n">U</span><span class="p">[</span><span class="n">u</span><span class="p">]</span>
+    <span class="n">newarr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span> <span class="p">(</span><span class="n">tmp</span><span class="o">.</span><span class="n">vars</span><span class="o">.</span><span class="n">nrStates</span><span class="p">(),</span><span class="n">nU</span><span class="p">)</span> <span class="p">)</span>
+    <span class="n">newarr</span><span class="p">[:,</span><span class="n">u</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp</span><span class="o">.</span><span class="n">table</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+    <span class="n">U</span><span class="p">[</span><span class="n">u</span><span class="p">]</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tmp</span><span class="o">.</span><span class="n">vars</span><span class="p">]</span><span class="o">+</span><span class="p">[</span><span class="n">z</span><span class="p">],</span> <span class="n">newarr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span> <span class="n">tmp</span><span class="o">.</span><span class="n">dims</span><span class="p">()</span><span class="o">+</span><span class="p">(</span><span class="n">nU</span><span class="p">,)</span> <span class="p">)</span> <span class="p">)</span>
+  <span class="k">return</span> <span class="n">C</span><span class="o">+</span><span class="n">DD</span><span class="o">+</span><span class="n">U</span><span class="o">+</span><span class="p">[</span><span class="n">fZ</span><span class="p">],</span> <span class="n">Q</span></div>
+
+
+
+<div class="viewcode-block" id="readOrder"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.readOrder">[docs]</a><span class="k">def</span> <span class="nf">readOrder</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Read an elimination order from a file</span>
+
+<span class="sd">    Elimination orders are stored as unknown length vectors, format &quot;[nvar] [v0] [v1] ... [vn]&quot;</span>
+
+<span class="sd">    Note: the same file format may also be useful for MPE configurations, etc.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">fp</span><span class="o">.</span><span class="n">readlines</span><span class="p">();</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">);</span>
+    <span class="n">nvar</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+    <span class="n">vals</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">nvar</span><span class="o">+</span><span class="mi">1</span><span class="p">)];</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span> <span class="o">!=</span> <span class="n">nvar</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Problem with file?&quot;</span><span class="p">);</span>
+    <span class="k">return</span> <span class="n">vals</span></div>
+
+
+
+<div class="viewcode-block" id="writeOrder"><a class="viewcode-back" href="../../filetypes.html#pyGM.filetypes.writeOrder">[docs]</a><span class="k">def</span> <span class="nf">writeOrder</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="n">order</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Write an elimination order (or other vector) to a file &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+        <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)));</span>
+        <span class="n">fp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">order</span><span class="p">)));</span></div>
+  
+
+
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../misc.html">Miscellaneous</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../csp.html">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

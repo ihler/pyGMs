@@ -1,0 +1,150 @@
+.. pyGM documentation master file, created by
+   sphinx-quickstart on Fri Jul  5 11:36:44 2019.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
+
+pyGM: Factor Objects
+====================
+
+.. py:class:: Factor
+
+Factors are the basic building block of our graphical model representations.  
+In general, a factor consists of a set of variables (its "scope"), and the 
+function values f(x) for each joint configuration x (a tuple of values) of
+its variables.  
+Factors support basic operations common in probabilistic inference, including 
+artihmetic operations, marginalization, optimization, and sampling.
+
+
+.. comment warning::
+   Variables are stored in sorted order; most of the time, factors are constructed
+   by reading from files, but if built by hand it is safest to use indexing to set
+   the values, e.g.,
+   .. code-block:: python
+      >>> f = Factor( [X0,X1,X2], 0.0 )   # builds a factor over X0,X1,X2, filled with zeros
+      >>> f[0,0,0] = 1.5                  # set f(X0=0,X1=0,X2=0) to 1.5
+
+
+Constructor & Accessors
+-----------------------
+.. automethod:: pyGM.Factor.__init__
+.. autodata:: pyGM.Factor.vars
+.. autodata:: pyGM.Factor.table
+.. autodata:: pyGM.Factor.nvar
+.. automethod:: pyGM.Factor.numel
+.. automethod:: pyGM.Factor.dims
+.. automethod:: pyGM.Factor.__getitem__
+.. automethod:: pyGM.Factor.valueMap
+.. automethod:: pyGM.Factor.__setitem__
+.. automethod:: pyGM.Factor.__float__
+.. automethod:: pyGM.Factor.__str__
+.. automethod:: pyGM.Factor.__repr__
+.. automethod:: pyGM.Factor.copy
+.. automethod:: pyGM.Factor.changeVars
+
+
+Unary Math Operators
+--------------------
+These methods perform element-wise mathematical transformations to the factor:
+
+.. automethod:: pyGM.Factor.__abs__
+.. automethod:: pyGM.Factor.__neg__
+.. automethod:: pyGM.Factor.exp
+.. automethod:: pyGM.Factor.log
+.. automethod:: pyGM.Factor.log10
+.. automethod:: pyGM.Factor.log2
+
+There are also in-place versions: 
+
+.. automethod:: pyGM.Factor.absIP
+.. automethod:: pyGM.Factor.expIP
+.. automethod:: pyGM.Factor.logIP
+.. automethod:: pyGM.Factor.log10IP
+.. automethod:: pyGM.Factor.log2IP
+
+
+Binary Math Operators
+---------------------
+These methods provide arithmetic operations that combine two factors into a single factor
+over the union of their scope:
+
+.. automethod:: pyGM.Factor.__add__
+.. automethod:: pyGM.Factor.__sub__
+.. automethod:: pyGM.Factor.__mul__
+.. automethod:: pyGM.Factor.__div__
+.. automethod:: pyGM.Factor.__pow__
+
+There are also in-place versions: 
+
+.. automethod:: pyGM.Factor.__iadd__
+.. automethod:: pyGM.Factor.__isub__
+.. automethod:: pyGM.Factor.__imul__
+.. automethod:: pyGM.Factor.__idiv__
+.. automethod:: pyGM.Factor.__ipow__
+
+
+
+Elimination and Conditioning
+----------------------------
+These methods produce a smaller factor, defined over fewer variables, by either eliminating over or
+conditioning on a subset of the arguments.
+
+.. automethod:: pyGM.Factor.sum
+.. automethod:: pyGM.Factor.max
+.. automethod:: pyGM.Factor.min
+.. automethod:: pyGM.Factor.lse
+.. automethod:: pyGM.Factor.sumPower
+.. automethod:: pyGM.Factor.lsePower
+.. automethod:: pyGM.Factor.marginal
+.. automethod:: pyGM.Factor.maxmarginal
+.. automethod:: pyGM.Factor.minmarginal
+
+
+.. automethod:: pyGM.Factor.condition
+.. automethod:: pyGM.Factor.condition2
+
+
+Tuple / Configuration Methods
+-----------------------------
+These methods return a tuple of integers, corresponding to some configuration of the factor's arguments:
+
+.. automethod:: pyGM.Factor.argmax
+.. automethod:: pyGM.Factor.argmin
+
+.. automethod:: pyGM.Factor.argmax2
+.. automethod:: pyGM.Factor.argmin2
+
+.. automethod:: pyGM.Factor.sample
+
+
+
+Boolean Tests
+-------------
+.. automethod:: pyGM.Factor.isfinite
+.. automethod:: pyGM.Factor.isnan
+.. automethod:: pyGM.Factor.isAny
+
+
+Other
+-------------
+.. automethod:: pyGM.Factor.entropy
+.. automethod:: pyGM.Factor.distance
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+* :ref:`genindex`
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

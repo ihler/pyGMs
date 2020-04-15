@@ -1,0 +1,14 @@
+
+pyGM: CSPs
+=================================
+
+.. automodule:: pyGM.csp
+   :members:
+
+
+
+* :ref:`genindex`
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

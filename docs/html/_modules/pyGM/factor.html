@@ -1,0 +1,756 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM.factor &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyGM.factor</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">factor.py</span>
+
+<span class="sd">Defines variables, variable sets, and dense factors over discrete variables (tables) for graphical models</span>
+
+<span class="sd">Version 0.0.1 (2015-09-28)</span>
+<span class="sd">(c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="c1">#import autograd.numpy as np</span>
+<span class="kn">from</span> <span class="nn">sortedcontainers</span> <span class="k">import</span> <span class="n">SortedSet</span> <span class="k">as</span> <span class="n">sset</span>
+
+<span class="k">try</span><span class="p">:</span>
+  <span class="kn">from</span> <span class="nn">pyGM.varset_c</span> <span class="k">import</span> <span class="n">Var</span><span class="p">,</span><span class="n">VarSet</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+  <span class="c1">#print &quot;Compiled version not loaded; importing python version&quot;</span>
+  <span class="kn">from</span> <span class="nn">pyGM.varset_py</span> <span class="k">import</span> <span class="n">Var</span><span class="p">,</span><span class="n">VarSet</span>    <span class="c1"># sortedcontainers version</span>
+  <span class="c1">#from .varset_py2 import Var,VarSet  # numpy array version</span>
+
+
+
+<span class="n">inf</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s1">&#39;inf&#39;</span><span class="p">)</span>
+
+
+<span class="n">orderMethod</span> <span class="o">=</span> <span class="s1">&#39;F&#39;</span>   <span class="c1"># TODO: currently stores in fortran order (as Matlab); should be trivially changable</span>
+<span class="c1">#orderMethod = &#39;C&#39;  #   Can we make this &quot;seamless&quot; to the user, and/or force them to do something consistent?</span>
+
+<span class="c1"># Notes: column-major (order=F) puts last index sequentially (&quot;big endian&quot;): t[0 0 0], t[0 0 1], t[0 1 0] ...</span>
+<span class="c1">#        row major (order=C) puts 1st index sequentially (&quot;little endian&quot;): t[0 0 0], t[1 0 0], t[0 1 0], ...</span>
+
+<span class="k">class</span> <span class="nc">Factor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&quot;&quot;&quot;A basic factor&lt;float&gt; class </span>
+
+<span class="sd">  Factors are the basic building block of our graphical model representations.  In general, a factor</span>
+<span class="sd">  consists of a set of variables (its &quot;scope&quot;), and a table of values indicating f(x) for each</span>
+<span class="sd">  joint configuration x (a tuple of values) of its variables.</span>
+
+<span class="sd">  Variables are stored in sorted order; most of the time, factors are constructed by reading from files,</span>
+<span class="sd">  but if built by hand it is safest to use indexing to set the values, e.g.,</span>
+
+<span class="sd">  &gt;&gt;&gt; f = Factor( [X,Y,Z], 0.0 )   # builds a factor over X,Y,Z filled with zeros</span>
+<span class="sd">  &gt;&gt;&gt; f[0,1,0] = 1.5               # set f(X=0,Y=1,Z=0) to 1.5</span>
+
+<span class="sd">  Useful attributes are f.vars (the scope) and f.table (the table, a numpy array).</span>
+
+<span class="sd">  Factors are imbued with many basic operations for manipulation:</span>
+<span class="sd">    Operators:  *, +, /, -, **, exp, log, abs, etc.</span>
+<span class="sd">    In-place versions:  *=, +=, /=, -=, **=, expIP, logIP, etc.</span>
+<span class="sd">    Elimination: max, min, sum, lse (log-sum-exp), etc.</span>
+<span class="sd">    Conditioning: return a factor defined by a sub-table, assigning some variables to values</span>
+<span class="sd">    Other: argmax, argmin, sample, etc., return configurations of X (tuples)</span>
+
+<span class="sd">  &quot;&quot;&quot;</span>
+
+  <span class="c1">#v = VarSet([])       # internal storage for variable set (VarSet)</span>
+  <span class="c1">#t = np.ndarray([])   # internal storage for table (numpy array)</span>
+
+<div class="viewcode-block" id="Factor.__init__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__init__">[docs]</a>  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="nb">vars</span><span class="o">=</span><span class="n">VarSet</span><span class="p">(),</span><span class="n">vals</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Constructor for Factor class</span>
+<span class="sd">    </span>
+<span class="sd">    &gt;&gt;&gt; f = Factor( [X,Y,Z],[vals] )     # creates factor over [X,Y,Z] with table [vals] </span>
+
+<span class="sd">    [vals] should be a correctly sized numpy array, or something that can be cast to the same.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: add user-specified order method for values (order=)</span>
+    <span class="c1"># TODO: accept out-of-order vars list  (=&gt; permute vals as req&#39;d)</span>
+    <span class="k">try</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="nb">vars</span><span class="p">)</span>                             <span class="c1"># try building varset with args</span>
+    <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>                                   <span class="c1"># if not iterable (e.g. single variable)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">()</span>                                 <span class="c1">#   try just adding it</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">vars</span><span class="p">)</span>
+    <span class="c1">#assert( self.v.nrStates() &gt; 0)</span>
+    <span class="c1">#if self.v.nrStatesDouble() &gt; 1e8: raise ValueError(&quot;Too big!&quot;);</span>
+
+    <span class="k">try</span><span class="p">:</span> 
+      <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">dims</span><span class="p">(),</span> <span class="nb">float</span><span class="p">,</span> <span class="n">orderMethod</span><span class="p">);</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">vals</span>                                  <span class="c1"># try filling factor with &quot;vals&quot;</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>                                  <span class="c1"># if it&#39;s an incompatible shape,</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">vals</span><span class="p">,</span> <span class="nb">float</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">dims</span><span class="p">(),</span> <span class="n">orderMethod</span><span class="p">)</span>  <span class="c1"># try again using reshape</span></div>
+
+  <span class="k">def</span> <span class="nf">__build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">vs</span><span class="p">,</span><span class="n">ndarray</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Internal build function from numpy ndarray&quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">vs</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">ndarray</span>
+    <span class="k">return</span> <span class="bp">self</span>
+
+  <span class="c1">#TODO: def assign(self, F) : set self equal to rhs F, e.g., *this = F</span>
+
+<div class="viewcode-block" id="Factor.copy"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.copy">[docs]</a>  <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Copy constructor; make a copy of a factor&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="s1">&#39;K&#39;</span><span class="p">))</span>   <span class="c1"># order=orderMethod?</span></div>
+
+<div class="viewcode-block" id="Factor.changeVars"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.changeVars">[docs]</a>  <span class="k">def</span> <span class="nf">changeVars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">vars</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Copy a factor but change its arguments (scope).</span>
+<span class="sd"> </span>
+<span class="sd">       &gt;&gt;&gt; f = Factor([X0,X1], table)      </span>
+<span class="sd">       &gt;&gt;&gt; g = changeVars( f, [X7,X5])   # now,  g(X5=b,X7=a) = f(X0=a,X1=b)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">VarSet</span><span class="p">(</span><span class="nb">vars</span><span class="p">)</span>
+    <span class="n">newOrder</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span><span class="nb">vars</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">v</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">copy</span><span class="p">:</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">newOrder</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>    <span class="n">ret</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">newOrder</span><span class="p">))</span>  <span class="c1"># try not to copy if possible</span>
+    <span class="k">return</span> <span class="n">ret</span></div>
+
+<div class="viewcode-block" id="Factor.__repr__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__repr__">[docs]</a>  <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Detailed representation: scope (varset) + table memory location&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s1">&#39;Factor(</span><span class="si">{:s}</span><span class="s1">,[0x</span><span class="si">{:x}</span><span class="s1">])&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">),</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">ctypes</span><span class="o">.</span><span class="n">data</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.__str__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__str__">[docs]</a>  <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Basic string representation: scope (varset) only&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s1">&#39;Factor(</span><span class="si">{:s}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">))</span></div>
+
+  <span class="nd">@property</span>
+  <span class="k">def</span> <span class="nf">vars</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Variables (scope) of the factor; read-only&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+  <span class="nd">@vars</span><span class="o">.</span><span class="n">setter</span>
+  <span class="k">def</span> <span class="nf">vars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">value</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Read-only attribute&quot;</span><span class="p">)</span>
+
+  <span class="nd">@property</span>
+  <span class="k">def</span> <span class="nf">table</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Table (values, as numpy array) of the factor&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span>
+  <span class="nd">@table</span><span class="o">.</span><span class="n">setter</span>
+  <span class="k">def</span> <span class="nf">table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">values</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">values</span>                                <span class="c1"># try filling factor with &quot;values&quot;</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>                                  <span class="c1"># if it&#39;s an incompatible shape,</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">values</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">dims</span><span class="p">(),</span><span class="n">order</span><span class="o">=</span><span class="n">orderMethod</span><span class="p">)</span> <span class="c1">#   try again using reshape</span>
+
+  <span class="nd">@property</span>
+  <span class="k">def</span> <span class="nf">nvar</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Number of arguments (variables, scope size) for the factor&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+
+  <span class="c1">#@property</span>
+<div class="viewcode-block" id="Factor.dims"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.dims">[docs]</a>  <span class="k">def</span> <span class="nf">dims</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Dimensions (table shape) of the tabular factor&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span>  </div>
+
+  <span class="c1">#@property  # TODO: make property?</span>
+<div class="viewcode-block" id="Factor.numel"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.numel">[docs]</a>  <span class="k">def</span> <span class="nf">numel</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Number of elements (size) of the tabular factor&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">size</span></div>
+
+
+  <span class="c1">################## METHODS ##########################################</span>
+<div class="viewcode-block" id="Factor.__getitem__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__getitem__">[docs]</a>  <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">loc</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Accessor: F[x1,x2] = F[sub2ind(x1,x2)] = F(X1=x1,X2=x2)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">loc</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="n">loc</span><span class="p">)]</span> 
+      <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s2">&quot;Index </span><span class="si">{}</span><span class="s2"> invalid for table with size </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Factor.__setitem__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__setitem__">[docs]</a>  <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">loc</span><span class="p">,</span><span class="n">val</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Assign values of the factor: F[i,j,k] = F[idx] = val if idx=sub2ind(i,j,k)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">loc</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="n">loc</span><span class="p">)]</span> <span class="o">=</span> <span class="n">val</span>
+      <span class="c1">#self.t.flat[loc] = val # uses c-contiguous order...</span>
+      <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s2">&quot;Index </span><span class="si">{}</span><span class="s2"> invalid for table with size </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span></div>
+
+  <span class="n">value</span> <span class="o">=</span> <span class="fm">__getitem__</span>        <span class="c1"># def f.value(loc): Alternate name for __getitem__</span>
+
+<div class="viewcode-block" id="Factor.valueMap"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.valueMap">[docs]</a>  <span class="k">def</span> <span class="nf">valueMap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">x</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Accessor: F[x[i],x[j]] where i,j = F.vars, i.e, x is a map from variables to their state values&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nvar</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>          <span class="c1"># if a scalar f&#39;n, nothing to index</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)]</span>   <span class="c1"># otherwise, find entry of table</span></div>
+
+  <span class="k">def</span> <span class="nf">setValueMap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">x</span><span class="p">,</span><span class="n">val</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Set F[x[i],x[j]] = val, where i,j = F.vars, i.e, x is a map from variables to their state values&quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>  <span class="c1"># lookup location to set, or 0 if scalar f&#39;n</span>
+ 
+<div class="viewcode-block" id="Factor.__float__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__float__">[docs]</a>  <span class="k">def</span> <span class="nf">__float__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Convert factor F to scalar float if possible; otherwise raises ValueError&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nvar</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Factor is not a scalar; scope </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">))</span></div>
+
+  <span class="c1"># TODO missing comparator functions?</span>
+
+<div class="viewcode-block" id="Factor.isnan"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.isnan">[docs]</a>  <span class="k">def</span> <span class="nf">isnan</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check for NaN (not-a-number) entries in the factor&#39;s values; true if any NaN present&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">isAny</span><span class="p">(</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.isfinite"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.isfinite">[docs]</a>  <span class="k">def</span> <span class="nf">isfinite</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check for infinite (-inf, inf) or NaN values in the factor; false if any present&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isAny</span><span class="p">(</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.isAny"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.isAny">[docs]</a>  <span class="k">def</span> <span class="nf">isAny</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">test</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generic check for any entries satisfying lambda-expression &quot;test&quot; in the factor&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">op_flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;readonly&#39;</span><span class="p">]):</span>
+      <span class="k">if</span> <span class="n">test</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="kc">False</span></div>
+
+
+
+  <span class="c1">#### UNARY OPERATIONS ####</span>
+<div class="viewcode-block" id="Factor.__abs__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__abs__">[docs]</a>  <span class="k">def</span> <span class="nf">__abs__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the absolute value of F:   G = F.abs()  =&gt;  G(x) = | F(x) | for all x&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">fabs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> <span class="p">)</span> </div>
+
+  <span class="nb">abs</span> <span class="o">=</span> <span class="fm">__abs__</span>
+
+<div class="viewcode-block" id="Factor.__neg__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__neg__">[docs]</a>  <span class="k">def</span> <span class="nf">__neg__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the negative of F:         G = -F  =&gt;  G(x) = -F(x) for all x&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">negative</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.exp"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.exp">[docs]</a>  <span class="k">def</span> <span class="nf">exp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the exponential of F:      G = F.exp()  =&gt;  G(x) = exp(F(x)) for all x&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.__pow__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__pow__">[docs]</a>  <span class="k">def</span> <span class="nf">__pow__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">power</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return F raised to a power:       G = F.power(p)  =&gt;  G(x) = ( F(x) )^p for all x&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span><span class="n">power</span><span class="p">)</span> <span class="p">)</span></div>
+
+  <span class="n">power</span> <span class="o">=</span> <span class="fm">__pow__</span>
+
+<div class="viewcode-block" id="Factor.log"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.log">[docs]</a>  <span class="k">def</span> <span class="nf">log</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>    <span class="c1"># just use base?</span>
+    <span class="sd">&quot;&quot;&quot;Return the natural log of F:      G = F.log()  =&gt;  G(x) = log( F(x) ) for all x&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.log2"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.log2">[docs]</a>  <span class="k">def</span> <span class="nf">log2</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the log base 2 of F:       G = F.log2()  =&gt;  G(x) = log2( F(x) ) for all x&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">log2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.log10"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.log10">[docs]</a>  <span class="k">def</span> <span class="nf">log10</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the log base 10 of F:      G = F.log10()  =&gt;  G(x) = log10( F(x) ) for all x&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">Factor</span><span class="p">()</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> <span class="p">)</span></div>
+
+
+
+  <span class="c1">#### IN-PLACE UNARY OPERATIONS ####</span>
+  <span class="c1"># always return &quot;self&quot; for chaining:  f.negIP().expIP() = exp(-f(x)) in-place</span>
+<div class="viewcode-block" id="Factor.absIP"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.absIP">[docs]</a>  <span class="k">def</span> <span class="nf">absIP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Take the absolute value of F:     F.absIP()  =&gt;  F(x) &lt;- |F(x)|  (in-place)&quot;&quot;&quot;</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">fabs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Factor.expIP"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.expIP">[docs]</a>  <span class="k">def</span> <span class="nf">expIP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Take the exponential of F:        F.expIP()  =&gt;  F(x) &lt;- exp(F(x))  (in-place)&quot;&quot;&quot;</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+
+  <span class="k">def</span> <span class="nf">powerIP</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">power</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Raise F to a power:               F.powerIP(p)  =&gt;  F(x) &lt;- ( F(x) )^p  (in-place)&quot;&quot;&quot;</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">power</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+
+  <span class="fm">__ipow__</span> <span class="o">=</span> <span class="n">powerIP</span>
+
+<div class="viewcode-block" id="Factor.logIP"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.logIP">[docs]</a>  <span class="k">def</span> <span class="nf">logIP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>    <span class="c1"># just use base?</span>
+    <span class="sd">&quot;&quot;&quot;Take the natural log of F:       F.logIP()  =&gt;  F(x) &lt;- log( F(x) )  (in-place)&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Factor.log2IP"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.log2IP">[docs]</a>  <span class="k">def</span> <span class="nf">log2IP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Take the log base 2 of F:        F.log2IP()  =&gt;  F(x) &lt;- log2( F(x) )  (in-place)&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="n">np</span><span class="o">.</span><span class="n">log2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Factor.log10IP"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.log10IP">[docs]</a>  <span class="k">def</span> <span class="nf">log10IP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Take the log base 10 of F:       F.log10IP()  =&gt;  F(x) &lt;- log10( F(x) )  (in-place)&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span></div>
+
+  <span class="k">def</span> <span class="nf">negIP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Take the negation of F:          F.negIP()  =&gt;  F(x) &lt;- (-F(x))  (in-place)&quot;&quot;&quot;</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">negative</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+
+
+
+  <span class="c1">#### BINARY OPERATIONS ####</span>
+  <span class="c1"># TODO: add boundary cases: 0/0 = ?  inf - inf = ?</span>
+<div class="viewcode-block" id="Factor.__add__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__add__">[docs]</a>  <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Addition of factors, e.g.,  G(x_1,x_2) = F1(x_1) + F2(x_2)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">__radd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Right-addition, e.g. G(x) = 3.0 + F(x)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Factor.__iadd__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__iadd__">[docs]</a>  <span class="k">def</span> <span class="nf">__iadd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;In-place addition, F1 += F2.  Most efficient if F2.vars &lt;= F1.vars&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.__sub__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__sub__">[docs]</a>  <span class="k">def</span> <span class="nf">__sub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Subtraction of factors, e.g.,  G(x_1,x_2) = F1(x_1) - F2(x_2)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">__rsub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Right-subtraction, e.g. G(x) = 3.0 - F(x)&quot;&quot;&quot;</span>
+    <span class="n">B</span> <span class="o">=</span> <span class="n">that</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">Factor</span><span class="p">)</span> <span class="k">else</span> <span class="n">Factor</span><span class="p">([],</span><span class="n">that</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">B</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Factor.__isub__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__isub__">[docs]</a>  <span class="k">def</span> <span class="nf">__isub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;In-place subtraction, F1 -= F2.  Most efficient if F2.vars &lt;= F1.vars&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.__mul__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__mul__">[docs]</a>  <span class="k">def</span> <span class="nf">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Multiplication of factors, e.g.,  G(x_1,x_2) = F1(x_1) * F2(x_2)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span></div>
+
+  <span class="k">def</span> <span class="nf">__rmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Right-multiplication, e.g. G(x) = 3.0 * F(x)&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Factor.__imul__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__imul__">[docs]</a>  <span class="k">def</span> <span class="nf">__imul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;In-place multiplication, F1 *= F2.  Most efficient if F2.vars &lt;= F1.vars&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.__div__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__div__">[docs]</a>  <span class="k">def</span> <span class="nf">__div__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Division of factors, e.g.,  G(x_1,x_2) = F1(x_1) / F2(x_2)&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">divide</span><span class="p">)</span></div>
+
+  <span class="fm">__truediv__</span> <span class="o">=</span> <span class="n">__div__</span>
+
+  <span class="k">def</span> <span class="nf">__rdiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Right-divide, e.g. G(x) = 3.0 / F(x)&quot;&quot;&quot;</span>
+    <span class="n">B</span> <span class="o">=</span> <span class="n">that</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">Factor</span><span class="p">)</span> <span class="k">else</span> <span class="n">Factor</span><span class="p">([],</span><span class="n">that</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">B</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">divide</span><span class="p">)</span> 
+
+  <span class="fm">__rtruediv__</span> <span class="o">=</span> <span class="n">__rdiv__</span>
+
+<div class="viewcode-block" id="Factor.__idiv__"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.__idiv__">[docs]</a>  <span class="k">def</span> <span class="nf">__idiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;In-place divide, F1 /= F2.  Most efficient if F2.vars &lt;= F1.vars&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opExpand2</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">divide</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span></div>
+
+  <span class="fm">__itruediv__</span> <span class="o">=</span> <span class="n">__idiv__</span>
+
+  <span class="c1">#### ELIMINATION OPERATIONS ####</span>
+<div class="viewcode-block" id="Factor.sum"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.sum">[docs]</a>  <span class="k">def</span> <span class="nf">sum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate via sum on F, e.g., f(X_2) = \sum_{x_1} F(x_1,X_2) = F.sum([X1])&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">elim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">&amp;</span> <span class="n">elim</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.marginal"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.marginal">[docs]</a>  <span class="k">def</span> <span class="nf">marginal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute the marginal of F, e.g., f(X_2) = \sum_{x_1} F(x_1,X_2) = F.marginal([X2])&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">target</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.sumPower"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.sumPower">[docs]</a>  <span class="k">def</span> <span class="nf">sumPower</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate via powered sum, e.g., f(X_2) =  \\root^{1/p}{ sum_{x_1} F(x_1,X_2)^p } = F.sumPower([X1],p)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">elim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span> <span class="o">**</span> <span class="n">power</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span>
+    <span class="n">tmp</span> <span class="o">**=</span> <span class="p">(</span><span class="mf">1.0</span><span class="o">/</span><span class="n">power</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">tmp</span></div>
+
+<div class="viewcode-block" id="Factor.lse"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.lse">[docs]</a>  <span class="k">def</span> <span class="nf">lse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate via log-sum-exp on F, e.g., f(X_2) = log \sum_{x_1} exp F(x_1,X_2) = F.lse([X1])&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">elim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce3</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">&amp;</span> <span class="n">elim</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">logaddexp</span><span class="o">.</span><span class="n">reduce</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.lsePower"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.lsePower">[docs]</a>  <span class="k">def</span> <span class="nf">lsePower</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate via powered log-sum-exp, e.g., f(X_2) = 1/p log \sum_{x_1} exp F(x_1,X_2)*p = F.lsePower([X_1],p)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">elim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+    <span class="k">if</span>   <span class="n">power</span> <span class="o">==</span> <span class="n">inf</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">power</span> <span class="o">==</span> <span class="o">-</span><span class="n">inf</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">power</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">:</span>  <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">lse</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">tmp</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">*</span><span class="n">power</span><span class="p">)</span><span class="o">.</span><span class="n">lse</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span>
+      <span class="n">tmp</span> <span class="o">*=</span> <span class="p">(</span><span class="mf">1.0</span><span class="o">/</span><span class="n">power</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">tmp</span></div>
+
+<div class="viewcode-block" id="Factor.max"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.max">[docs]</a>  <span class="k">def</span> <span class="nf">max</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate via max on F, e.g., f(X_2) = \max_{x_1} F(x_1,X_2) = F.max([X1])&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">elim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">&amp;</span> <span class="n">elim</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.maxmarginal"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.maxmarginal">[docs]</a>  <span class="k">def</span> <span class="nf">maxmarginal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute the max-marginal of F, e.g., f(X_2) = \max_{x_1} F(x_1,X_2) = F.maxmarginal([X2])&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">target</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.min"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.min">[docs]</a>  <span class="k">def</span> <span class="nf">min</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate via min on F, e.g., f(X_2) = \min_{x_1} F(x_1,X_2) = F.min([X1])&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">elim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">&amp;</span> <span class="n">elim</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.minmarginal"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.minmarginal">[docs]</a>  <span class="k">def</span> <span class="nf">minmarginal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute the min-marginal of F, e.g., f(X_2) = \min_{x_1} F(x_1,X_2) = F.minmarginal([X2])&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">target</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span></div>
+
+
+    <span class="c1"># use ufunc.reduceat?  reduce etc seem not good?</span>
+    <span class="c1"># frompyfunc to make ufunc from python function?</span>
+    <span class="c1"># use &quot;externalloop&quot; flag?</span>
+    <span class="c1">#return t.max(axis=None,out=None) # use axis to specific dimensions to eliminate; out for IP version</span>
+
+
+  <span class="c1">#### TUPLE OPERATIONS ####</span>
+<div class="viewcode-block" id="Factor.argmax2"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.argmax2">[docs]</a>  <span class="k">def</span> <span class="nf">argmax2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cvars</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ctuple</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find the argmax of the factor, with partial conditioning (as var list + value list) if desired.</span>
+
+<span class="sd">    Returns a maximizing configuration of f(X|Xc=xc) as a tuple of states</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">cvars</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">argmax</span><span class="p">())</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">ctuple</span><span class="p">[</span><span class="n">cvars</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span> <span class="k">if</span>  <span class="n">x</span> <span class="ow">in</span> <span class="n">cvars</span> <span class="k">else</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span><span class="o">.</span><span class="n">argmax</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Factor.argmax"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.argmax">[docs]</a>  <span class="k">def</span> <span class="nf">argmax</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">evidence</span><span class="o">=</span><span class="p">{}):</span>
+    <span class="sd">&quot;&quot;&quot;Find the argmax of the factor, with partial conditioning (as dict evidence[v]) if desired</span>
+
+<span class="sd">    Returns a maximizing configuration of f(X|Xc=xc) as a tuple of states</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">evidence</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">argmax</span><span class="p">())</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">evidence</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">evidence</span> <span class="k">else</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.argmin2"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.argmin2">[docs]</a>  <span class="k">def</span> <span class="nf">argmin2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cvars</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ctuple</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find the argmin of the factor, with partial conditioning if desired (list+list version)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">cvars</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">argmin</span><span class="p">())</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">ctuple</span><span class="p">[</span><span class="n">cvars</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span> <span class="k">if</span>  <span class="n">x</span> <span class="ow">in</span> <span class="n">cvars</span> <span class="k">else</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span><span class="o">.</span><span class="n">argmin</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Factor.argmin"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.argmin">[docs]</a>  <span class="k">def</span> <span class="nf">argmin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">evidence</span><span class="o">=</span><span class="p">{}):</span>
+    <span class="sd">&quot;&quot;&quot;Find the argmin of the factor, with partial conditioning if desired (dict version)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">evidence</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">argmax</span><span class="p">())</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">evidence</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">evidence</span> <span class="k">else</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span> <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Factor.sample"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.sample">[docs]</a>  <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Z</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Draw a random sample (as a tuple of states) from the factor; assumes positivity.</span>
+
+<span class="sd">    If option Z=&lt;float&gt; set, the function will assume normalization factor Z</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">Z</span> <span class="o">=</span> <span class="n">Z</span> <span class="k">if</span> <span class="n">Z</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>    <span class="c1"># normalize if desired / by default</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">Z</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">),</span> <span class="s1">&#39;Non-normalizable factor (perhaps log factor?)&#39;</span> <span class="c1"># also check for positivity?</span>
+    <span class="n">pSoFar</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">pDraw</span> <span class="o">=</span> <span class="n">Z</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random_sample</span><span class="p">()</span>
+    <span class="n">it</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">op_flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;readonly&#39;</span><span class="p">],</span> <span class="n">flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;multi_index&#39;</span><span class="p">])</span>  <span class="c1"># for tuple return</span>
+    <span class="c1">#it = np.nditer(self.t, op_flags=[&#39;readonly&#39;], flags=[orderMethod+&#39;_index&#39;])  # for index return</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">it</span><span class="o">.</span><span class="n">finished</span><span class="p">:</span>
+      <span class="n">pSoFar</span> <span class="o">+=</span> <span class="n">it</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+      <span class="k">if</span> <span class="p">(</span> <span class="n">pSoFar</span>  <span class="o">&gt;</span> <span class="n">pDraw</span> <span class="p">):</span>
+        <span class="k">return</span> <span class="n">it</span><span class="o">.</span><span class="n">multi_index</span>   <span class="c1"># multi_index for tuple return</span>
+        <span class="c1">#return it.index    # index for index return</span>
+      <span class="n">it</span><span class="o">.</span><span class="n">iternext</span><span class="p">()</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">ind2sub</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>   <span class="c1"># if numerical issue: return final state</span></div>
+
+<div class="viewcode-block" id="Factor.condition2"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.condition2">[docs]</a>  <span class="k">def</span> <span class="nf">condition2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cvars</span><span class="o">=</span><span class="p">[],</span><span class="n">ctuple</span><span class="o">=</span><span class="p">[]):</span>
+    <span class="sd">&quot;&quot;&quot;Create a clamped (or &quot;sliced&quot;) factor using partial conditioning (list+list version)</span>
+
+<span class="sd">    &gt;&gt;&gt; F.condition2([0,2],[a,b])   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">ctuple</span><span class="p">[</span><span class="n">cvars</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span> <span class="k">if</span>  <span class="n">x</span> <span class="ow">in</span> <span class="n">cvars</span> <span class="k">else</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">cvars</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">ax</span><span class="p">])</span>   <span class="c1"># forces table copy in constructor</span></div>
+
+<div class="viewcode-block" id="Factor.condition"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.condition">[docs]</a>  <span class="k">def</span> <span class="nf">condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">evidence</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create a clamped (or &quot;sliced&quot;) factor using partial conditioning (dict version)</span>
+
+<span class="sd">    &gt;&gt;&gt; F.condition({0:a,2:b})   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span> <span class="n">evidence</span><span class="p">[</span><span class="n">v</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">evidence</span> <span class="k">else</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="p">)</span>
+    <span class="n">cvars</span> <span class="o">=</span> <span class="p">[</span> <span class="n">v</span> <span class="k">for</span> <span class="n">j</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span> <span class="k">if</span> <span class="n">ax</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">!=</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="p">]</span> 
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">cvars</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">ax</span><span class="p">])</span>   <span class="c1"># forces table copy in constructor</span></div>
+
+  <span class="n">slice2</span> <span class="o">=</span> <span class="n">condition2</span>   <span class="c1"># alternate, libDAI-like names</span>
+  <span class="nb">slice</span> <span class="o">=</span> <span class="n">condition</span>
+
+  <span class="c1"># TODO: assign_slice( evidence, conditional_table ) </span>
+  <span class="c1">#    create ax = tuple( ... );  self.table(ax) = conditional_table</span>
+  <span class="c1"># TODO: assign_slice2( vars, vals, conditional_table )</span>
+
+<div class="viewcode-block" id="Factor.entropy"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.entropy">[docs]</a>  <span class="k">def</span> <span class="nf">entropy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute the entropy of the factor (normalizes, assumes positive)&quot;&quot;&quot;</span>
+    <span class="n">Z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">Z</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Non-normalizable factor (perhaps log factor?)&#39;</span><span class="p">)</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="n">H</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span> <span class="n">tmp</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">tmp</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="mf">1e-300</span><span class="p">))</span> <span class="p">)</span><span class="o">/</span><span class="n">Z</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Z</span><span class="p">)</span>  <span class="c1"># entropy of tmp/Z</span>
+    <span class="k">return</span> <span class="n">H</span></div>
+
+  <span class="k">def</span> <span class="nf">norm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distance</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute any of several norm-like functions on F(x).</span>
+
+<span class="sd">    &#39;distance&#39; can be any of:</span>
+<span class="sd">       &#39;L1&#39;    : L1 or manhattan distance, sum of absolute values</span>
+<span class="sd">       &#39;L2&#39;    : L2 or Euclidean distance, sum of squares</span>
+<span class="sd">       &#39;LInf&#39;  : L-Infinity distance, maximum value</span>
+<span class="sd">       &#39;KL&#39;    : Shannon entropy (KL = Kullback Leibler)</span>
+<span class="sd">       &#39;HPM&#39;   : Hilbert&#39;s projective metric</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">distance</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span>   <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;l1&#39;</span><span class="p">:</span>   <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;l2&#39;</span><span class="p">:</span>   <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">*</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;linf&#39;</span><span class="p">:</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;kl&#39;</span><span class="p">:</span>   <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entropy</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;hpm&#39;</span><span class="p">:</span>  <span class="n">F</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">();</span> <span class="k">return</span> <span class="n">F</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">-</span> <span class="n">F</span><span class="o">.</span><span class="n">min</span><span class="p">();</span>
+    <span class="k">else</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unrecognized norm type </span><span class="si">{}</span><span class="s2">; &#39;L1&#39;,&#39;L2&#39;,&#39;LInf&#39;,&#39;KL&#39;,&#39;HPM&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">distance</span><span class="p">));</span>
+
+<div class="viewcode-block" id="Factor.distance"><a class="viewcode-back" href="../../factor.html#pyGM.Factor.distance">[docs]</a>  <span class="k">def</span> <span class="nf">distance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">that</span><span class="p">,</span> <span class="n">distance</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute any of several norm-like functions on F(x).</span>
+
+<span class="sd">    &#39;distance&#39; can be any of:</span>
+<span class="sd">       &#39;L1&#39;    : L1 or manhattan distance, sum of absolute values</span>
+<span class="sd">       &#39;L2&#39;    : L2 or Euclidean distance, sum of squares</span>
+<span class="sd">       &#39;LInf&#39;  : L-Infinity distance, maximum value</span>
+<span class="sd">       &#39;KL&#39;    : Shannon entropy (KL = Kullback Leibler)</span>
+<span class="sd">       &#39;HPM&#39;   : Hilbert&#39;s projective metric</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">distance</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">if</span>   <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;l1&#39;</span><span class="p">:</span>   <span class="n">tmp</span> <span class="o">-=</span> <span class="n">that</span><span class="p">;</span> <span class="n">tmp</span><span class="o">.</span><span class="n">absIP</span><span class="p">();</span> <span class="k">return</span> <span class="n">tmp</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;l2&#39;</span><span class="p">:</span>   <span class="n">tmp</span> <span class="o">-=</span> <span class="n">that</span><span class="p">;</span> <span class="n">tmp</span> <span class="o">*=</span> <span class="n">tmp</span><span class="p">;</span>  <span class="k">return</span> <span class="n">tmp</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;linf&#39;</span><span class="p">:</span> <span class="n">tmp</span> <span class="o">-=</span> <span class="n">that</span><span class="p">;</span> <span class="n">tmp</span><span class="o">.</span><span class="n">absIP</span><span class="p">();</span> <span class="k">return</span> <span class="n">tmp</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;kl&#39;</span><span class="p">:</span>   <span class="n">Z</span><span class="o">=</span><span class="n">tmp</span><span class="o">.</span><span class="n">sum</span><span class="p">();</span> <span class="n">tmp</span><span class="o">/=</span><span class="n">that</span><span class="p">;</span> <span class="n">tmp</span><span class="o">*=</span><span class="n">that</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">/</span><span class="n">Z</span><span class="p">;</span> <span class="n">tmp</span><span class="o">.</span><span class="n">logIP</span><span class="p">();</span> <span class="n">tmp</span><span class="o">*=</span><span class="bp">self</span><span class="p">;</span> <span class="k">return</span> <span class="n">tmp</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">/</span><span class="n">Z</span><span class="p">;</span>
+    <span class="k">elif</span> <span class="n">distance</span> <span class="o">==</span> <span class="s1">&#39;hpm&#39;</span><span class="p">:</span>  <span class="n">tmp</span> <span class="o">/=</span> <span class="n">that</span><span class="p">;</span> <span class="n">tmp</span><span class="o">.</span><span class="n">logIP</span><span class="p">();</span> <span class="k">return</span> <span class="n">tmp</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">-</span> <span class="n">tmp</span><span class="o">.</span><span class="n">min</span><span class="p">();</span>
+    <span class="k">else</span><span class="p">:</span> <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unrecognized norm type </span><span class="si">{}</span><span class="s2">; &#39;L1&#39;,&#39;L2&#39;,&#39;LInf&#39;,&#39;KL&#39;,&#39;HPM&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">distance</span><span class="p">));</span></div>
+    
+    
+<span class="c1">#useful things:</span>
+<span class="c1"># np.ndindex(shape) : iterate over tuples consistent with shape</span>
+<span class="c1"># for index, x in np.ndenumerate(a):  iterate over tuples, values</span>
+
+<span class="c1">#def mean(factorList):</span>
+<span class="c1"># return</span>
+
+<span class="c1">#def geomean(factorList):</span>
+<span class="c1"># return</span>
+
+  <span class="c1">############################ INTERNAL ##############################################</span>
+  
+  <span class="c1"># slow version with arbitrary operator</span>
+  <span class="k">def</span> <span class="nf">__opUnaryIP</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">op</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">op_flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;readwrite&#39;</span><span class="p">]):</span>
+      <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+
+  <span class="k">def</span> <span class="nf">__opUnary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">op</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">Factor</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">order</span><span class="o">=</span><span class="n">orderMethod</span><span class="p">)</span> <span class="p">)</span><span class="o">.</span><span class="n">__opUnaryIP</span><span class="p">(</span><span class="n">op</span><span class="p">)</span>
+  
+  <span class="c1">#def __opAccumulate(self,r,op):</span>
+  <span class="c1">#  for x in np.nditer(self.t, op_flags=[&#39;readonly&#39;]):</span>
+  <span class="c1">#    r = op(r,x)</span>
+  <span class="c1">#  return r</span>
+
+<span class="c1"># TODO: at least use numpy &quot;broadcast&quot; / &quot;external_loop&quot; etc ; maybe define ufuncs or compile them?</span>
+<span class="c1"># </span>
+  <span class="k">def</span> <span class="nf">__opExpand1</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">,</span><span class="n">op</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Internal combination function; brute force application of arbitrary function &quot;op&quot;; slow &quot;&quot;&quot;</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span>
+    <span class="n">B</span> <span class="o">=</span> <span class="n">that</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">Factor</span><span class="p">)</span> <span class="k">else</span> <span class="n">Factor</span><span class="p">([],</span><span class="n">that</span><span class="p">)</span>
+    <span class="n">vall</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">v</span> <span class="o">|</span> <span class="n">B</span><span class="o">.</span><span class="n">v</span>
+    <span class="n">axA</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span>  <span class="n">x</span> <span class="ow">in</span> <span class="n">A</span><span class="o">.</span><span class="n">v</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">vall</span><span class="p">)</span>
+    <span class="n">axB</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">B</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span>  <span class="n">x</span> <span class="ow">in</span> <span class="n">B</span><span class="o">.</span><span class="n">v</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">vall</span><span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span> <span class="p">(</span><span class="ow">not</span> <span class="p">(</span><span class="n">out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">and</span> <span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">v</span> <span class="o">==</span> <span class="n">vall</span><span class="p">)</span> <span class="p">):</span>
+      <span class="n">f</span> <span class="o">=</span> <span class="n">out</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">f</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="n">vall</span><span class="p">)</span>   <span class="c1"># TODO: should also change &quot;out&quot; if specified!</span>
+    <span class="n">it</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">([</span><span class="n">A</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">t</span><span class="p">],</span> 
+      <span class="n">op_axes</span> <span class="o">=</span> <span class="p">[</span> <span class="n">axA</span><span class="p">,</span> <span class="n">axB</span><span class="p">,</span> <span class="kc">None</span> <span class="p">],</span> 
+      <span class="n">op_flags</span><span class="o">=</span><span class="p">[[</span><span class="s1">&#39;readonly&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;readonly&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;writeonly&#39;</span><span class="p">]])</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">)</span> <span class="ow">in</span> <span class="n">it</span><span class="p">:</span>
+      <span class="n">op</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">out</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">f</span>
+
+  <span class="k">def</span> <span class="nf">__opExpand2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">that</span><span class="p">,</span><span class="n">op</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Internal combination function; assumes &quot;op&quot; is a numpy build-in (using a ufunc)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">Factor</span><span class="p">):</span> <span class="c1"># if not a Factor, must be a scalar; use scalar version:</span>
+      <span class="k">if</span> <span class="n">out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">return</span> <span class="n">Factor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">,</span> <span class="n">op</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span><span class="n">that</span><span class="p">))</span> <span class="c1"># with constructor</span>
+      <span class="k">else</span><span class="p">:</span> <span class="n">op</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">that</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">t</span><span class="p">);</span> <span class="k">return</span> <span class="n">out</span>          <span class="c1"># or direct write</span>
+    <span class="c1"># Non-scalar 2nd argument version:</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span>
+    <span class="n">B</span> <span class="o">=</span> <span class="n">that</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">that</span><span class="p">,</span><span class="n">Factor</span><span class="p">)</span> <span class="k">else</span> <span class="n">Factor</span><span class="p">([],</span><span class="n">that</span><span class="p">)</span>
+    <span class="n">vall</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">v</span> <span class="o">|</span> <span class="n">B</span><span class="o">.</span><span class="n">v</span>
+    <span class="n">dA</span><span class="p">,</span><span class="n">dB</span> <span class="o">=</span> <span class="n">vall</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">v</span><span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">v</span><span class="p">);</span>
+    <span class="c1">#dA = tuple(x.states if  x in A.v else 1 for x in vall);</span>
+    <span class="c1">#dB = tuple(x.states if  x in B.v else 1 for x in vall);</span>
+    <span class="k">if</span> <span class="p">(</span> <span class="p">(</span><span class="n">out</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">v</span> <span class="o">==</span> <span class="n">vall</span><span class="p">)</span> <span class="p">):</span> <span class="c1"># if out can be written to directly, do so</span>
+      <span class="n">op</span><span class="p">(</span> <span class="n">A</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">dA</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;A&#39;</span><span class="p">)</span> <span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">dB</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;A&#39;</span><span class="p">),</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">t</span> <span class="p">)</span>   <span class="c1"># TODO: order=A necessary?</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">t</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span> <span class="n">A</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">dA</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;A&#39;</span><span class="p">)</span> <span class="p">,</span> <span class="n">B</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">dB</span><span class="p">,</span><span class="n">order</span><span class="o">=</span><span class="s1">&#39;A&#39;</span><span class="p">)</span> <span class="p">)</span>   <span class="c1"># TODO: order=A necessary?</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span> <span class="n">out</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">()</span>
+      <span class="k">if</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vall</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">):</span> <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">t</span><span class="p">],</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+      <span class="n">out</span><span class="o">.</span><span class="n">__build</span><span class="p">(</span><span class="n">vall</span><span class="p">,</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+  <span class="k">def</span> <span class="nf">__opReduce1</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">elim</span><span class="p">,</span><span class="n">op</span><span class="p">,</span><span class="n">init</span><span class="p">):</span> <span class="c1"># TODO: change to IP; caller initializes?</span>
+    <span class="sd">&quot;&quot;&quot;Internal reduce / eliminate function; brute force application of arbitrary f&#39;n &quot;op&quot;; slow &quot;&quot;&quot;</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">elim</span> <span class="p">,</span> <span class="n">init</span><span class="p">)</span> <span class="c1"># TODO: fill with ???  (0.0 for sum, -inf for lse, etc)</span>
+    <span class="n">axA</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)))</span>
+    <span class="n">axC</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span><span class="n">f</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span>  <span class="n">x</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">v</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span> <span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">))</span>
+    <span class="n">C</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">t</span>
+    <span class="n">it</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">([</span><span class="n">A</span><span class="p">,</span> <span class="n">C</span><span class="p">],</span> <span class="n">op_axes</span> <span class="o">=</span> <span class="p">[</span> <span class="n">axA</span><span class="p">,</span> <span class="n">axC</span> <span class="p">],</span> <span class="n">flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;reduce_ok&#39;</span><span class="p">],</span> <span class="n">op_flags</span><span class="o">=</span><span class="p">[[</span><span class="s1">&#39;readonly&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s1">&#39;readwrite&#39;</span><span class="p">]])</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span> <span class="ow">in</span> <span class="n">it</span><span class="p">:</span>
+      <span class="n">op</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">out</span><span class="o">=</span><span class="n">j</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">f</span>
+
+  <span class="k">def</span> <span class="nf">__opReduce2</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>  <span class="c1"># assumes elim &lt;= self.v</span>
+    <span class="sd">&quot;&quot;&quot;Internal reduce / eliminate function; assumes &quot;op&quot; is a numpy build-in (using a ufunc)&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span><span class="o">==</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">))):</span>
+      <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="p">(</span><span class="n">out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>   <span class="c1"># non-in-place version</span>
+      <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">elim</span><span class="p">)</span>
+      <span class="n">out</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">elim</span><span class="p">,</span> <span class="n">op</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">ax</span><span class="p">))</span>   
+    <span class="k">else</span><span class="p">:</span>                 <span class="c1"># in-place version</span>
+      <span class="k">assert</span> <span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">v</span> <span class="o">==</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">-</span><span class="n">elim</span><span class="p">)</span> <span class="p">),</span> <span class="s2">&quot;Cannot eliminate into an existing factor with incorrect scope&quot;</span>
+      <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">elim</span><span class="p">)</span>
+      <span class="n">op</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">t</span><span class="p">)</span> 
+    <span class="k">return</span> <span class="n">out</span>
+
+  <span class="k">def</span> <span class="nf">__opReduce3</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elim</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>  <span class="c1"># assumes elim &lt;= self.v</span>
+    <span class="sd">&quot;&quot;&quot;Internal reduce / eliminate function; assumes &quot;op&quot; is a numpy build-in (using a ufunc)</span>
+<span class="sd">    works with numpy reduce ops that require single axes at a time</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">elim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">elim</span><span class="p">)</span><span class="o">==</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">))):</span>
+      <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">Factor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">-</span> <span class="n">elim</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">v</span> <span class="o">==</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">-</span><span class="n">elim</span><span class="p">)</span> <span class="p">),</span> <span class="s2">&quot;Cannot eliminate into an existing factor with incorrect scope&quot;</span>
+      <span class="n">ax</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">elim</span><span class="p">)</span> 
+      <span class="n">src</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span>
+      <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">src</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">src</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="n">ax</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">ax</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+      <span class="n">op</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>   
+      <span class="k">return</span> <span class="n">out</span>
+
+
+
+<span class="sd">&quot;&quot;&quot; NumPy reduce example:</span>
+<span class="sd">&gt;&gt;&gt; a = np.arange(24).reshape(2,3,4)</span>
+<span class="sd">&gt;&gt;&gt; b = np.array(0)</span>
+<span class="sd">&gt;&gt;&gt; for x, y in np.nditer([a, b], flags=[&#39;reduce_ok&#39;, &#39;external_loop&#39;],</span>
+<span class="sd">...                     op_flags=[[&#39;readonly&#39;], [&#39;readwrite&#39;]]):</span>
+<span class="sd">...     y[...] += x</span>
+<span class="sd">...</span>
+
+<span class="sd">Notes</span>
+<span class="sd">  xhat[ [v.label for v in f.var] ] = list(f.argmax())</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../filetypes.html">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../misc.html">Miscellaneous</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../csp.html">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

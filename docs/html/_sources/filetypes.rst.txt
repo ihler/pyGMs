@@ -1,0 +1,14 @@
+
+pyGM: File Input/Output 
+=================================
+
+.. automodule:: pyGM.filetypes
+   :members:
+
+
+
+* :ref:`genindex`
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

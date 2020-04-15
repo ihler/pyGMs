@@ -1,10 +1,10 @@
 """
-factor.py
+factorSparse.py
 
-Defines variables, variable sets, and dense factors over discrete variables (tables) for graphical models
+Defines sparse factors over discrete variables (tables) for graphical models
 
-Version 0.0.1 (2015-09-28)
-(c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
+Version 0.1.0 (2019-07-12)
+(c) 2019 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 import numpy as np
@@ -29,8 +29,8 @@ orderMethod = 'F'   # TODO: currently stores in fortran order (as Matlab); shoul
 # Notes: column-major (order=F) puts last index sequentially ("big endian"): t[0 0 0], t[0 0 1], t[0 1 0] ...
 #        row major (order=C) puts 1st index sequentially ("little endian"): t[0 0 0], t[1 0 0], t[0 1 0], ...
 
-class Factor(object):
-  """A basic factor<float> class 
+class FactorSparse(object):
+  """A sparse factor<float> class 
 
   Factors are the basic building block of our graphical model representations.  In general, a factor
   consists of a set of variables (its "scope"), and a table of values indicating f(x) for each
@@ -42,7 +42,7 @@ class Factor(object):
   >>> f = Factor( [X,Y,Z], 0.0 )   # builds a factor over X,Y,Z filled with zeros
   >>> f[0,1,0] = 1.5               # set f(X=0,Y=1,Z=0) to 1.5
 
-  Useful attributes are f.vars (the scope) and f.table (the table, a numpy array).
+  Useful attributes are f.vars (the scope) and f.table (the table, a dictionary map).
 
   Factors are imbued with many basic operations for manipulation:
     Operators:  *, +, /, -, **, exp, log, abs, etc.
@@ -73,23 +73,31 @@ class Factor(object):
     #assert( self.v.nrStates() > 0)
     #if self.v.nrStatesDouble() > 1e8: raise ValueError("Too big!");
 
-    try: 
-      self.t = np.empty(self.v.dims(), float, orderMethod);
-      self.t[:] = vals                                  # try filling factor with "vals"
-    except ValueError:                                  # if it's an incompatible shape,
-      self.t = np.reshape(np.array(vals, float), self.v.dims(), orderMethod)  # try again using reshape
+    self.t = {}
+    try:
+      tmp_t = np.empty(self.v.dims(), float, orderMethod);
+      tmp_t[:] = vals
+      for i in np.ndindex( tuple(self.v.dims()) ):
+        if tmp_t[i] != 0.0: self.t[i] = tmp_t[i]
+    except ValueError:
+      tmp_t = np.reshape(np.array(vals, float), self.v.dims(), orderMethod)  # try again using reshape
+      for i in np.ndindex( tuple(self.v.dims()) ):
+        if tmp_t[i] != 0.0: self.t[i] = tmp_t[i]
+    except TypeError:
+      self.t = dict(vals)
 
-  def __build(self,vs,ndarray):
+
+  def __build(self,vs,table):
     """Internal build function from numpy ndarray"""
     self.v = vs
-    self.t = ndarray
+    self.t = table
     return self
 
   #TODO: def assign(self, F) : set self equal to rhs F, e.g., *this = F
 
   def copy(self):
     """Copy constructor; make a copy of a factor"""
-    return Factor().__build(self.v.copy(),self.t.copy('K'))   # order=orderMethod?
+    return FactorSparse().__build(self.v.copy(),self.t.copy())   # no ordermethod required for sparse
 
   def changeVars(self, vars, copy=True):
     """Copy a factor but change its arguments (scope).
@@ -97,6 +105,7 @@ class Factor(object):
        >>> f = Factor([X0,X1], table)      
        >>> g = changeVars( f, [X7,X5])   # now,  g(X5=b,X7=a) = f(X0=a,X1=b)
     """
+    raise NotImplementedError
     v = VarSet(vars)
     newOrder = map(lambda x:vars.index(x), v)
     if copy: ret = Factor(v, self.t.transpose(newOrder))
@@ -105,7 +114,7 @@ class Factor(object):
 
   def __repr__(self):
     """Detailed representation: scope (varset) + table memory location"""
-    return 'Factor({:s},[0x{:x}])'.format(str(self.v),self.t.ctypes.data)
+    return 'Factor({:s},[0x{:x}])'.format(str(self.v),id(self.t))
 
   def __str__(self):
     """Basic string representation: scope (varset) only"""
@@ -121,14 +130,15 @@ class Factor(object):
 
   @property
   def table(self):
-    """Table (values, as numpy array) of the factor"""
+    """Table (values, as python dict) of the factor"""
     return self.t
   @table.setter
   def table(self,values):
     try:
-      self.t[:] = values                                # try filling factor with "values"
-    except ValueError:                                  # if it's an incompatible shape,
-      self.t = np.array(values,dtype=float).reshape(self.v.dims(),order=orderMethod) #   try again using reshape
+      self.t = dict(values)                             # try filling factor with "values"
+    except ValueError:                                  # if it's incompatible,
+      raise NotImplementedError
+      #self.t = np.array(values,dtype=float).reshape(self.v.dims(),order=orderMethod) #   try again using reshape
 
   @property
   def nvar(self):
@@ -138,19 +148,21 @@ class Factor(object):
   #@property
   def dims(self):
     """Dimensions (table shape) of the tabular factor"""
-    return self.t.shape  
+    return self.v.dims() #self.t.shape  
 
   #@property  # TODO: make property?
   def numel(self):
     """Number of elements (size) of the tabular factor"""
-    return self.t.size
+    return len(self.t) #nrStates = self.v.nrStates()? #self.t.size
 
 
   ################## METHODS ##########################################
   def __getitem__(self,loc):
     """Accessor: F[x1,x2] = F[sub2ind(x1,x2)] = F(X1=x1,X2=x2)"""
-    if self.t.ndim == 1 or isinstance(loc, (tuple, list)):
+    if isinstance(loc, tuple):  # lost "list" operation? 
       return self.t[loc]
+    elif self.nvar < 2:
+      return self.t[(loc,)]
     else:
       try:
         return self.t[self.v.ind2sub(loc)] 
@@ -159,26 +171,24 @@ class Factor(object):
 
   def __setitem__(self,loc,val):
     """Assign values of the factor: F[i,j,k] = F[idx] = val if idx=sub2ind(i,j,k)"""
-    if self.t.ndim == 1 or isinstance(loc, (tuple, list)):
+    if isinstance(loc, tuple):  # lost "list" operation? 
       self.t[loc] = val
+    elif self.nvar < 2:
+      self.t[(loc,)] = val
     else:
       try:
         self.t[self.v.ind2sub(loc)] = val
-      #self.t.flat[loc] = val # uses c-contiguous order...
       except ValueError:
         raise IndexError("Index {} invalid for table with size {}".format(loc,self.t.shape))
+      #self.t.flat[loc] = val # uses c-contiguous order...
 
   value = __getitem__        # def f.value(loc): Alternate name for __getitem__
 
   def valueMap(self,x):
-    """Accessor: F[x[i],x[j]] where i,j = F.vars, i.e, x is a map from variables to their state values"""
+    """Accessor: F[x[i],x[j]] where i,j = F.vars, i.e, x is a map from variables to their values"""
     if self.nvar == 0: return self.t[0]          # if a scalar f'n, nothing to index
     return self.t[tuple(x[v] for v in self.v)]   # otherwise, find entry of table
 
-  def setValueMap(self,x,val):
-    """Set F[x[i],x[j]] = val, where i,j = F.vars, i.e, x is a map from variables to their state values"""
-    self.t[tuple(x[v] for v in self.v) if len(self.v) else 0] = val  # lookup location to set, or 0 if scalar f'n
- 
   def __float__(self):
     """Convert factor F to scalar float if possible; otherwise raises ValueError"""
     if (self.nvar == 0): return self.t[0]
@@ -196,7 +206,7 @@ class Factor(object):
 
   def isAny(self,test):
     """Generic check for any entries satisfying lambda-expression "test" in the factor"""
-    for x in np.nditer(self.t, op_flags=['readonly']):
+    for l,x in self.t.items(): 
       if test(x):
         return True
     return False
@@ -206,38 +216,38 @@ class Factor(object):
   #### UNARY OPERATIONS ####
   def __abs__(self):
     """Return the absolute value of F:   G = F.abs()  =>  G(x) = | F(x) | for all x"""
-    return Factor().__build( self.v.copy() , np.fabs(self.t) ) 
+    return FactorSparse().__build( self.v.copy() , {l: np.fabs(x) for l,x in self.t.items()} )
 
   abs = __abs__
 
   def __neg__(self):
     """Return the negative of F:         G = -F  =>  G(x) = -F(x) for all x"""
-    return Factor().__build( self.v.copy() , np.negative(self.t) )
+    return FactorSparse().__build( self.v.copy() , {l: np.negative(x) for l,x in self.t.items()} )
 
   def exp(self):
     """Return the exponential of F:      G = F.exp()  =>  G(x) = exp(F(x)) for all x"""
-    return Factor().__build( self.v.copy() , np.exp(self.t) )
+    return FactorSparse().__build( self.v.copy() , {l: np.exp(x) for l,x in self.t.items()} )
 
   def __pow__(self,power):
     """Return F raised to a power:       G = F.power(p)  =>  G(x) = ( F(x) )^p for all x"""
-    return Factor().__build( self.v.copy() , np.power(self.t,power) )
+    return FactorSparse().__build( self.v.copy() , {l: np.power(x,power) for l,x in self.t.items()} )
 
   power = __pow__
 
   def log(self):    # just use base?
     """Return the natural log of F:      G = F.log()  =>  G(x) = log( F(x) ) for all x"""
     with np.errstate(divide='ignore'):
-      return Factor().__build( self.v.copy() , np.log(self.t) )
+      return FactorSparse().__build( self.v.copy() , {l: np.log(x) for l,x in self.t.items()} )
 
   def log2(self):
     """Return the log base 2 of F:       G = F.log2()  =>  G(x) = log2( F(x) ) for all x"""
     with np.errstate(divide='ignore'):
-      return Factor().__build( self.v.copy() , np.log2(self.t) )
+      return FactorSparse().__build( self.v.copy() , {l: np.log2(x) for l,x in self.t.items()} )
 
   def log10(self):
     """Return the log base 10 of F:      G = F.log10()  =>  G(x) = log10( F(x) ) for all x"""
     with np.errstate(divide='ignore'):
-      return Factor().__build( self.v.copy() , np.log10(self.t) )
+      return FactorSparse().__build( self.v.copy() , {l: np.log10(x) for l,x in self.t.items()} )
 
 
 
@@ -245,17 +255,17 @@ class Factor(object):
   # always return "self" for chaining:  f.negIP().expIP() = exp(-f(x)) in-place
   def absIP(self):
     """Take the absolute value of F:     F.absIP()  =>  F(x) <- |F(x)|  (in-place)"""
-    np.fabs(self.t, out=self.t)
+    for l,x in self.t.items(): self.t[l] = np.fabs(x)
     return self
 
   def expIP(self):
     """Take the exponential of F:        F.expIP()  =>  F(x) <- exp(F(x))  (in-place)"""
-    np.exp(self.t, out=self.t)
+    for l,x in self.t.items(): self.t[l] = np.exp(x)
     return self
 
   def powerIP(self,power):
     """Raise F to a power:               F.powerIP(p)  =>  F(x) <- ( F(x) )^p  (in-place)"""
-    np.power(self.t, power, out=self.t)
+    for l,x in self.t.items(): self.t[l] = np.power(x,power)
     return self
 
   __ipow__ = powerIP
@@ -263,24 +273,24 @@ class Factor(object):
   def logIP(self):    # just use base?
     """Take the natural log of F:       F.logIP()  =>  F(x) <- log( F(x) )  (in-place)"""
     with np.errstate(divide='ignore'):
-      np.log(self.t, out=self.t)
+      for l,x in self.t.items(): self.t[l] = np.log(x)
     return self
 
   def log2IP(self):
     """Take the log base 2 of F:        F.log2IP()  =>  F(x) <- log2( F(x) )  (in-place)"""
     with np.errstate(divide='ignore'):
-      np.log2(self.t, out=self.t)
+      for l,x in self.t.items(): self.t[l] = np.log2(x)
     return self
 
   def log10IP(self):
     """Take the log base 10 of F:       F.log10IP()  =>  F(x) <- log10( F(x) )  (in-place)"""
     with np.errstate(divide='ignore'):
-      np.log10(self.t, out=self.t)
+      for l,x in self.t.items(): self.t[l] = np.log10(x)
     return self
 
   def negIP(self):
     """Take the negation of F:          F.negIP()  =>  F(x) <- (-F(x))  (in-place)"""
-    np.negative(self.t, out=self.t)
+    for l,x in self.t.items(): self.t[l] = np.negative(x)
     return self
 
 
@@ -305,7 +315,7 @@ class Factor(object):
 
   def __rsub__(self,that):
     """Right-subtraction, e.g. G(x) = 3.0 - F(x)"""
-    B = that if isinstance(that,Factor) else Factor([],that)
+    B = that if isinstance(that,FactorSparse) else FactorSparse([],that)
     return B.__opExpand2(self, np.subtract)
 
   def __isub__(self,that):
@@ -333,7 +343,7 @@ class Factor(object):
 
   def __rdiv__(self,that):
     """Right-divide, e.g. G(x) = 3.0 / F(x)"""
-    B = that if isinstance(that,Factor) else Factor([],that)
+    B = that if isinstance(that,FactorSparse) else FactorSparse([],that)
     with np.errstate(divide='ignore'):
       return B.__opExpand2(self, np.divide) 
 
@@ -366,7 +376,8 @@ class Factor(object):
   def lse(self, elim=None, out=None):
     """Eliminate via log-sum-exp on F, e.g., f(X_2) = log \sum_{x_1} exp F(x_1,X_2) = F.lse([X1])"""
     if (elim is None): elim = self.v
-    return self.__opReduce3(self.v & elim, np.logaddexp.reduce, out=out)
+    return self.__opReduce2(self.v & elim, np.logaddexp.reduce, out=out)
+    #return self.__opReduce3(self.v & elim, np.logaddexp.reduce, out=out)
 
   def lsePower(self, elim=None, power=1.0, out=None):
     """Eliminate via powered log-sum-exp, e.g., f(X_2) = 1/p log \sum_{x_1} exp F(x_1,X_2)*p = F.lsePower([X_1],p)"""
@@ -410,34 +421,42 @@ class Factor(object):
 
     Returns a maximizing configuration of f(X|Xc=xc) as a tuple of states
     """
-    if (cvars is None):
-      return self.v.ind2sub(self.t.argmax())
-    ax = tuple(ctuple[cvars.index(x)] if  x in cvars else slice(None) for x in self.v)
-    return self.v.ind2sub(self.t[ax].argmax())
+    ax = tuple(ctuple[cvars.index(x)] if  x in cvars else None for x in self.v)
+    mxi,mx = None, float('-inf')
+    for l,x in self.t.items():
+      if (cvars is None) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):
+        if (mx < x) or (mx==x and l<mxi): mxi,mx = l,x
+    return mxi
 
   def argmax(self, evidence={}):
     """Find the argmax of the factor, with partial conditioning (as dict evidence[v]) if desired
 
     Returns a maximizing configuration of f(X|Xc=xc) as a tuple of states
     """
-    if len(evidence)==0:
-      return self.v.ind2sub(self.t.argmax())
-    ax = tuple(evidence[v] if v in evidence else slice(None) for v in self.v)
-    return self.v.ind2sub( self.t[ax].argmax() )
+    ax = tuple(evidence[v] if v in evidence else None for v in self.v)
+    mxi,mx = None, float('-inf')
+    for l,x in self.t.items():
+      if (not evidence) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):
+        if (mx < x) or (mx==x and l<mxi): mxi,mx = l,x
+    return mxi
 
   def argmin2(self, cvars=None, ctuple=None):
     """Find the argmin of the factor, with partial conditioning if desired (list+list version)"""
-    if (cvars is None):
-      return self.v.ind2sub(self.t.argmin())
-    ax = tuple(ctuple[cvars.index(x)] if  x in cvars else slice(None) for x in self.v)
-    return self.v.ind2sub(self.t[ax].argmin())
+    ax = tuple(ctuple[cvars.index(x)] if  x in cvars else None for x in self.v)
+    mni,mn = None, float('-inf')
+    for l,x in self.t.items():
+      if (cvars is None) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):
+        if (mn > x) or (mn==x and l<mxi): mxi,mx = l,x
+    return mni
 
   def argmin(self, evidence={}):
     """Find the argmin of the factor, with partial conditioning if desired (dict version)"""
-    if len(evidence)==0:
-      return self.v.ind2sub(self.t.argmax())
-    ax = tuple(evidence[v] if v in evidence else slice(None) for v in self.v)
-    return self.v.ind2sub( self.t[ax].argmax() )
+    ax = tuple(evidence[v] if v in evidence else None for v in self.v)
+    mni,mn = None, float('-inf')
+    for l,x in self.t.items():
+      if (not evidence) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):
+        if (mn > x) or (mn==x and l<mxi): mxi,mx = l,x
+    return mni
 
   def sample(self, Z=None):
     """Draw a random sample (as a tuple of states) from the factor; assumes positivity.
@@ -448,32 +467,34 @@ class Factor(object):
     assert (Z > 0), 'Non-normalizable factor (perhaps log factor?)' # also check for positivity?
     pSoFar = 0.0
     pDraw = Z * np.random.random_sample()
-    it = np.nditer(self.t, op_flags=['readonly'], flags=['multi_index'])  # for tuple return
-    #it = np.nditer(self.t, op_flags=['readonly'], flags=[orderMethod+'_index'])  # for index return
-    while not it.finished:
-      pSoFar += it[0]
-      if ( pSoFar  > pDraw ):
-        return it.multi_index   # multi_index for tuple return
-        #return it.index    # index for index return
-      it.iternext()
-    return self.v.ind2sub(self.numel()-1)   # if numerical issue: return final state
+    for l,x in self.t.items():
+      pSoFar += x
+      if (pSoFar > pDraw): return l
+    return l                                  # if numerical issue: return final state
 
   def condition2(self, cvars=[],ctuple=[]):
     """Create a clamped (or "sliced") factor using partial conditioning (list+list version)
 
     >>> F.condition2([0,2],[a,b])   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)
     """
-    ax = tuple(ctuple[cvars.index(x)] if  x in cvars else slice(None) for x in self.v)
-    return Factor(self.v - cvars, self.t[ax])   # forces table copy in constructor
+    ax = tuple(ctuple[cvars.index(x)] if  x in cvars else None for x in self.v)
+    out = FactorSparse(self.v - cvars, {})
+    for l,x in self.t.items():
+      if (cvars is None) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):
+        out.t[ tuple(li for li,ai in zip(l,ax) if ai is None) ] = x
+    return out
 
   def condition(self, evidence):
     """Create a clamped (or "sliced") factor using partial conditioning (dict version)
 
     >>> F.condition({0:a,2:b})   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)
     """
-    ax = tuple( evidence[v] if v in evidence else slice(None) for v in self.v )
-    cvars = [ v for j,v in enumerate(self.v) if ax[j] != slice(None) ] 
-    return Factor(self.v - cvars, self.t[ax])   # forces table copy in constructor
+    ax = tuple(evidence[v] if  v in evidence else None for x in self.v)
+    out = FactorSparse(self.v - cvars, {})
+    for l,x in self.t.items():
+      if (cvars is None) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):
+        out.t[ tuple(li for li,ai in zip(l,ax) if ai is None) ] = x
+    return out
 
   slice2 = condition2   # alternate, libDAI-like names
   slice = condition
@@ -484,9 +505,9 @@ class Factor(object):
 
   def entropy(self):
     """Compute the entropy of the factor (normalizes, assumes positive)"""
-    Z = self.sum()
+    tmp = np.array( list(self.t.values()) )
+    Z = tmp.sum()
     if not (Z > 0): raise ValueError('Non-normalizable factor (perhaps log factor?)')
-    tmp = np.ravel(self.t)
     H = -np.dot( tmp, np.log(tmp.clip(min=1e-300)) )/Z + np.log(Z)  # entropy of tmp/Z
     return H
 
@@ -509,7 +530,7 @@ class Factor(object):
     else: raise ValueError("Unrecognized norm type {}; 'L1','L2','LInf','KL','HPM'".format(distance));
 
   def distance(self, that, distance):
-    """Compute any of several norm-like functions on F(x).
+    """Compute any of several distance-like functions on F(x).
 
     'distance' can be any of:
        'L1'    : L1 or manhattan distance, sum of absolute values
@@ -556,89 +577,96 @@ class Factor(object):
 
 # TODO: at least use numpy "broadcast" / "external_loop" etc ; maybe define ufuncs or compile them?
 # 
-  def __opExpand1(self,that,op, out=None):
-    """Internal combination function; brute force application of arbitrary function "op"; slow """
-    A = self
-    B = that if isinstance(that,Factor) else Factor([],that)
-    vall = A.v | B.v
-    axA = list(A.v.index(x) if  x in A.v else -1 for x in vall)
-    axB = list(B.v.index(x) if  x in B.v else -1 for x in vall)
-    if ( (not (out is None)) and (out.v == vall) ):
-      f = out
-    else:
-      f = Factor(vall)   # TODO: should also change "out" if specified!
-    it = np.nditer([A.t, B.t, f.t], 
-      op_axes = [ axA, axB, None ], 
-      op_flags=[['readonly'], ['readonly'], ['writeonly']])
-    for (i,j,k) in it:
-      op(i,j,out=k)
-    return f
+#  def __opExpand1(self,that,op, out=None):
+#    """Internal combination function; brute force application of arbitrary function "op"; slow """
+#    A = self
+#    B = that if isinstance(that,Factor) else Factor([],that)
+#    vall = A.v | B.v
+#    axA = list(A.v.index(x) if  x in A.v else -1 for x in vall)
+#    axB = list(B.v.index(x) if  x in B.v else -1 for x in vall)
+#    if ( (not (out is None)) and (out.v == vall) ):
+#      f = out
+#    else:
+#      f = Factor(vall)   # TODO: should also change "out" if specified!
+#    it = np.nditer([A.t, B.t, f.t], 
+#      op_axes = [ axA, axB, None ], 
+#      op_flags=[['readonly'], ['readonly'], ['writeonly']])
+#    for (i,j,k) in it:
+#      op(i,j,out=k)
+#    return f
 
   def __opExpand2(self,that,op, out=None):
-    """Internal combination function; assumes "op" is a numpy build-in (using a ufunc)"""
-    if not isinstance(that,Factor): # if not a Factor, must be a scalar; use scalar version:
-      if out is None: return Factor(self.v, op(self.t,that)) # with constructor
-      else: op(self.t, that, out=out.t); return out          # or direct write
+    """Internal combination function; assumes "op" is a numpy built-in (using a ufunc)"""
+    if not isinstance(that,FactorSparse): # if not a Factor, must be a scalar; use scalar version:
+      if out is None: return FactorSparse(self.v, {l:op(x,that) for l,x in self.t.items()}) 
+      else: out.t = {l:op(x,that) for l,x in self.t.items()}; return out    # or direct write
     # Non-scalar 2nd argument version:
     A = self
-    B = that if isinstance(that,Factor) else Factor([],that)
-    vall = A.v | B.v
-    dA,dB = vall.expand_dims(A.v, B.v);
-    #dA = tuple(x.states if  x in A.v else 1 for x in vall);
-    #dB = tuple(x.states if  x in B.v else 1 for x in vall);
-    if ( (out is not None) and (out.v == vall) ): # if out can be written to directly, do so
-      op( A.t.reshape(dA,order='A') , B.t.reshape(dB,order='A'), out=out.t )   # TODO: order=A necessary?
-    else:
-      t = op( A.t.reshape(dA,order='A') , B.t.reshape(dB,order='A') )   # TODO: order=A necessary?
-      if (out is None): out = Factor()
-      if (len(vall)==0): t = np.asarray([t],dtype=float)
-      out.__build(vall,t)
+    B = that if isinstance(that,FactorSparse) else FactorSparse([],that)
+    vboth = A.v & B.v
+    vall  = A.v | B.v
+    findA, findB = {},{}
+    idxA, idxB = list(A.v.index(x) for x in vboth), list(B.v.index(x) for x in vboth)
+    for l,x in A.t.items(): l2=tuple(l[i] for i in idxA); findA.setdefault(l2,{}).update({l:x})
+    for l,x in B.t.items(): l2=tuple(l[i] for i in idxB); findB.setdefault(l2,{}).update({l:x})
+    if out is None: out = FactorSparse(vall,{})
+    else: out.t.clear()
+    for l2 in findA.keys():
+      for lA,xA in findA.get(l2,{}).items():
+        for lB,xB in findB.get(l2,{}).items():
+          lAB = tuple( lA[A.v.index(v)] if v in A.v else lB[B.v.index(v)] for v in vall )
+          out.t[lAB] = op(xA,xB)
+    out.v = vall
     return out
 
 
-  def __opReduce1(self,elim,op,init): # TODO: change to IP; caller initializes?
-    """Internal reduce / eliminate function; brute force application of arbitrary f'n "op"; slow """
-    A = self.t
-    f = Factor( self.v - elim , init) # TODO: fill with ???  (0.0 for sum, -inf for lse, etc)
-    axA = list(range(len(self.v)))
-    axC = list(map(lambda x:f.v.index(x) if  x in f.v else -1 ,self.v))
-    C = f.t
-    it = np.nditer([A, C], op_axes = [ axA, axC ], flags=['reduce_ok'], op_flags=[['readonly'], ['readwrite']])
-    for (i,j) in it:
-      op(i,j,out=j)
-    return f
+#  def __opReduce1(self,elim,op,init): # TODO: change to IP; caller initializes?
+#    """Internal reduce / eliminate function; brute force application of arbitrary f'n "op"; slow """
+#    A = self.t
+#    f = Factor( self.v - elim , init) # TODO: fill with ???  (0.0 for sum, -inf for lse, etc)
+#    axA = list(range(len(self.v)))
+#    axC = list(map(lambda x:f.v.index(x) if  x in f.v else -1 ,self.v))
+#    C = f.t
+#    it = np.nditer([A, C], op_axes = [ axA, axC ], flags=['reduce_ok'], op_flags=[['readonly'], ['readwrite']])
+#    for (i,j) in it:
+#      op(i,j,out=j)
+#    return f
 
   def __opReduce2(self, elim, op, out=None):  # assumes elim <= self.v
     """Internal reduce / eliminate function; assumes "op" is a numpy build-in (using a ufunc)"""
+    #raise NotImplementedError
     if ((elim is None) or (len(elim)==len(self.v))):
-      return op(self.t)
-    elif (out is None):   # non-in-place version
-      ax = tuple(self.v.index(x) for x in elim)
-      out = Factor(self.v - elim, op(self.t, axis=ax))   
-    else:                 # in-place version
+      return op(list(self.t.values()))
+    if (out is not None):
       assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
-      ax = tuple(self.v.index(x) for x in elim)
-      op(self.t, axis=ax, out=out.t) 
+      out.t.clear()
+    else:
+      out = FactorSparse(self.v-elim,{})
+    keep = list(self.v.index(x) for x in out.v)
+    for loc1,x in self.t.items():
+      loc2 = tuple(loc1[i] for i in keep)   
+      #print("Reducing "+str(loc1)+" to "+str(loc2))
+      out.t[loc2] = x if loc2 not in out.t else op([out.t[loc2],x])
     return out
 
-  def __opReduce3(self, elim, op, out=None):  # assumes elim <= self.v
-    """Internal reduce / eliminate function; assumes "op" is a numpy build-in (using a ufunc)
-    works with numpy reduce ops that require single axes at a time
-    """
-    if ((elim is None) or (len(elim)==len(self.v))):
-      return op(np.ravel(self.t))
-    else:
-      if (out is None):
-        out = Factor(self.v - elim)
-      else:
-        assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
-      ax = tuple(self.v.index(x) for x in elim) 
-      src = self.t
-      while len(ax) > 1:
-        src = op(src,axis=ax[-1])
-        ax = ax[:-1]
-      op(src, axis=ax, out=out.t)   
-      return out
+#  def __opReduce3(self, elim, op, out=None):  # assumes elim <= self.v
+#    """Internal reduce / eliminate function; assumes "op" is a numpy build-in (using a ufunc)
+#    works with numpy reduce ops that require single axes at a time
+#    """
+#    if ((elim is None) or (len(elim)==len(self.v))):
+#      return op(np.ravel(self.t))
+#    else:
+#      if (out is None):
+#        out = Factor(self.v - elim)
+#      else:
+#        assert (out.v == (self.v-elim) ), "Cannot eliminate into an existing factor with incorrect scope"
+#      ax = tuple(self.v.index(x) for x in elim) 
+#      src = self.t
+#      while len(ax) > 1:
+#        src = op(src,axis=ax[-1])
+#        ax = ax[:-1]
+#      op(src, axis=ax, out=out.t)   
+#      return out
 
 
 

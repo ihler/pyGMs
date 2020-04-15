@@ -1,0 +1,235 @@
+.. Demonstration and examples of the Factor class for pyGM
+
+pyGM: Factors Overview
+======================
+
+For more details, see :class:`pyGM.Factor`
+
+Factors are the basic building block of our graphical model representations. In
+general, a factor consists of a set of variables (its "scope"), and the 
+function values f(x) for each joint configuration x (a tuple of values) of
+its variables.  
+Factors support basic operations common in probabilistic inference, including
+artihmetic operations, marginalization, optimization, and sampling.
+
+
+Basics
+------
+
+We can create a basic factor object by specifying its variables and a table of
+values. The table size also specifies the cardinality of each variable; here
+:math:`X_0` has three values :math:`\{0,1,2\}` and :math:`X_1` has two, :math:`\{0,1\}`. 
+Internally, discrete variables always take on numeric values starting at zero. If you wish
+to associate these values with other symbols, you must define a mapping yourself.
+Similarly, internally discrete variables are associated with a non-negative "id number"
+(:math:`X_0`, :math:`X_1`, etc.); you may assign these variables to other names in your code, but
+only their id number is necessary to refer to them.
+
+.. code-block:: python
+
+   >>> import pyGM as gm
+   >>> import numpy as np
+   >>> X0 = gm.Var(0,3)    # Define variable "X0" taking 3 states
+   >>> X1 = gm.Var(1,2)    # Define variable "X1" taking 2 states
+   >>> F = gm.Factor([X0,X1], np.random.rand(3,2))
+
+From the Factor class, you can access the variables over which it is defined (its scope),
+their sizes, the full table of values, or the value of the function at some configuration 
+of its arguments:
+
+.. code-block:: python
+
+   >>> F.vars           # variables in the factor's arguments
+   {0,1}
+
+   >>> F.dims()         # the dimensions / # of states of each variable
+   (3, 2)
+
+   >>> F.table          # table representation uses numpy arrays
+   array([[0.55538171, 0.7854848 ],
+          [0.29212683, 0.60789923],
+          [0.48685444, 0.24967191]])
+
+   >>> F[2,0]           # check F(X0=2, X1=0)
+   '0.486854436651706'
+
+
+.. warning::
+   Factors store their arguments in sorted order according to their id numbers,
+   **not** the order in which the variables appear when the factor is created.
+   Thus, to avoid confusion you should be careful when defining and accessing factors to try 
+   to do so in id-number order.
+   If you need to access values without knowing the id number ordering, you can use "valueMap"
+   and "setValueMap":
+
+   .. code-block:: python
+
+      >>> F.valueMap( {X1:0, X0:2} )           # check entry value
+      '0.486854436651706'
+
+      >>> F.setValueMap( {X1:0, X0:2}, 0.5 )   # set entry to 0.5
+
+
+
+   
+
+Constructor & Accessors
+-----------------------
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.__init__`  Constructor
+:attr:`~pyGM.Factor.vars`      Get the list of arguments for F (property)
+:attr:`~pyGM.Factor.table`     Get the table of values for F (property)
+:attr:`~pyGM.Factor.nvar`      Number of arguments (property)
+:meth:`~pyGM.Factor.numel`     Number of elements in the table specification of F
+:meth:`~pyGM.Factor.dims`      The dimensions (number of states) of the argument variables
+:meth:`~pyGM.Factor.__str__`   A basic string representation, "Factor( {ids} )"
+:meth:`~pyGM.Factor.__repr__`  A string representation that including pointer information on the numpy table
+============================== =============================================================================
+
+
+.. comment automethod:: pyGM.Factor.__getitem__
+.. comment automethod:: pyGM.Factor.valueMap
+.. comment automethod:: pyGM.Factor.__setitem__
+.. comment automethod:: pyGM.Factor.__float__
+.. comment automethod:: pyGM.Factor.copy
+.. comment automethod:: pyGM.Factor.changeVars
+
+
+Arithmetic Functions
+--------------------
+
+Basic arithmetic (e.g., plus) is defined to produce a factor equivalent to the
+operator applied to the argument functions. If both factors have the same
+variables (arguments), the operation is elementwise; if they have different
+scopes, the operations produce a new function defined over their joint scope: 
+
+.. code-block:: python
+
+   >>> F = gm.Factor([X0],[0,1,2])
+   >>> G = gm.Factor([X1],[1,5])
+
+   >>> F+G
+   Factor({0,1},[0x1b999c0])
+   >>> (F+G).table
+   array([[1., 5.],
+          [2., 6.],
+          [3., 7.]])
+
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.__add__`   Addition, F+G
+:meth:`~pyGM.Factor.__sub__`   Subtraction, F-G
+:meth:`~pyGM.Factor.__mul__`   Multiplication, F*G
+:meth:`~pyGM.Factor.__div__`   Division, F/G
+:meth:`~pyGM.Factor.__pow__`   Raise each element of F to a (scalar) power p, F**p
+============================== =============================================================================
+
+Arithmetic operators also have in-place versions ("+=", "-=", etc.) that replace the
+left-hand-side factor with the result.
+
+A number of unary arithmetic operations are also defined:
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.__abs__`   Return a factor whose elements are the absolute value of those in F, :math:`G(x)=|F(x)|`
+:meth:`~pyGM.Factor.__neg__`   Return a factor whose elements are the negation of those in F, :math:`G(x)=-F(x)`
+:meth:`~pyGM.Factor.exp`       Return a factor whose elements are exponential of F, :math:`G(x) = \exp(F(x))`
+:meth:`~pyGM.Factor.log`       Natural logarithm, :math:`G(x) = \log(F(x))`
+:meth:`~pyGM.Factor.log10`     Base-10 logarithm
+:meth:`~pyGM.Factor.log2`      Base-2 logarithm
+============================== =============================================================================
+
+Some unary operators also have in-place versions: 
+:meth:`~pyGM.Factor.absIP`, 
+:meth:`~pyGM.Factor.negIP`, 
+:meth:`~pyGM.Factor.expIP`, 
+:meth:`~pyGM.Factor.logIP`, 
+:meth:`~pyGM.Factor.log10IP`, and
+:meth:`~pyGM.Factor.log2IP`
+
+
+Elimination Operators
+---------------------
+
+The most useful aspect of the factor class is to automate the tedious
+computations underlying many of the mathematical operators common in
+probabilistic graphical models. These include basic variable elimination
+operators, specifying the variables to be eliminated: 
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.sum`       Sum over the values of F over one or more variables, e.g., :math:`G(X_1)=\sum_{x_2}F(X_1,x_2)`
+:meth:`~pyGM.Factor.max`       Find the maximum value of F over one or more variables, e.g., :math:`G(X_1)=\max_{x_2}F(X_1,x_2)`
+:meth:`~pyGM.Factor.min`       Find the minimum value of F over one or more variables
+:meth:`~pyGM.Factor.lse`       Log-sum-exp elimination operator, :math:`G(X_1)=\log \sum_{x_2} \exp(F(X_1,x_2))`
+:meth:`~pyGM.Factor.sumPower`  Power summation, :math:`G(X_1)=\Big(\sum_{x_2}\big(F(X_1,x_2)\big)^{p}\Big)^{\frac{1}{p}}`
+:meth:`~pyGM.Factor.lsePower`  Log-powersum-exp elimination
+============================== =============================================================================
+
+The closely related functions 
+:meth:`~pyGM.Factor.marginal`, :meth:`~pyGM.Factor.maxmarginal`, and :meth:`~pyGM.Factor.minmarginal` 
+eliminate all variables in the factor *except* those specified, to produce (unnormalized)
+marginal functions.
+
+
+
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.condition` Extract the subtable of F corresponding to an assignment to some of F's args, e.g., :math:`G(X_1)=F(X_1,X_2=x_2)`
+:meth:`~pyGM.Factor.argmax`    Find the configuration of arguments corresponding to F's maximum value
+:meth:`~pyGM.Factor.argmin`    Find the configuration of arguments corresponding to F's minimum value
+:meth:`~pyGM.Factor.sample`    Draw a configuration of args at random according to F as a probability measure
+============================== =============================================================================
+
+See also the related :meth:`~pyGM.Factor.condition2`, :meth:`~pyGM.Factor.argmax2`, :meth:`~pyGM.Factor.argmin2`, which are similar but take differently
+formatted function arguments.
+
+
+Boolean Tests
+-------------
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.isfinite`  True if F contains only finite values (no inf, -inf, nan)
+:meth:`~pyGM.Factor.isnan`     True if F contains any not-a-number (nan) values
+:meth:`~pyGM.Factor.isAny`     Helper function for arbitrary elementwise boolean tests on F
+============================== =============================================================================
+
+
+Other Operations
+----------------
+
+============================== =============================================================================
+Method                         Description
+============================== =============================================================================
+:meth:`~pyGM.Factor.entropy`   Evaluate the Shannon entropy of F, interpreted as a probability measure
+:meth:`~pyGM.Factor.distance`  Evaluate any of several distances or pseudo-distances between two factors F, G
+============================== =============================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+* :ref:`genindex`
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

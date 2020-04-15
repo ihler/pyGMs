@@ -1,0 +1,277 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>pyGM: File Input/Output &#8212; pyGM 0.0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pyGM: Drawing" href="draw.html" />
+    <link rel="prev" title="pyGM: Graphical Models" href="graphmodel.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-pyGM.filetypes">
+<span id="pygm-file-input-output"></span><h1>pyGM: File Input/Output<a class="headerlink" href="#module-pyGM.filetypes" title="Permalink to this headline">¶</a></h1>
+<p>pyGM/filetypes.py</p>
+<p>Read / write methods for graphical model file types (UAI, WCSP, etc.)</p>
+<p>readUai  /  writeUai            : read/write UAI competition file format
+readEvidence10, readEvidence14  : read/write UAI, Ergo evidence formats (14: single evidence)
+readErgo                        : read Ergo Bayes Net format
+readWCSP /  writeWCSP           : read/write WCSP weighted CSP format</p>
+<p>Version 0.0.1 (2015-09-28)
+(c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.</p>
+<dl class="function">
+<dt id="pyGM.filetypes.Limid2MMAP">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">Limid2MMAP</code><span class="sig-paren">(</span><em>C</em>, <em>D</em>, <em>U</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#Limid2MMAP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.Limid2MMAP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert LIMID factors into MMAP factors &amp; query variable list</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span> <span class="o">=</span> <span class="n">readLimid</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">factors</span><span class="p">,</span><span class="n">query</span> <span class="o">=</span> <span class="n">Limid2MMAP</span><span class="p">(</span><span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">)</span> 
+</pre></div>
+</div>
+<p>See also readLimid().</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.LimidCRA2MMAP">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">LimidCRA2MMAP</code><span class="sig-paren">(</span><em>C</em>, <em>D</em>, <em>U</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#LimidCRA2MMAP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.LimidCRA2MMAP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert CRA LIMID factors into MMAP factors &amp; query variable list  (Not Implemented)</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">factors</span><span class="p">,</span><span class="n">query</span> <span class="o">=</span> <span class="n">LimidCRA2MMAP</span><span class="p">(</span><span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span><span class="p">)</span> 
+</pre></div>
+</div>
+<p>See also readLimidCRA().</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readDSL">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readDSL</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readDSL"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readDSL" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read GeNIe XML DSL format Bayesian network</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readErgo">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readErgo</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readErgo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readErgo" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a Bayesian network (list of conditional probabilities) specified in ERGO format</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">factor_list</span><span class="p">,</span><span class="n">names</span><span class="p">,</span><span class="n">labels</span> <span class="o">=</span> <span class="n">readErgo</span><span class="p">(</span> <span class="s1">&#39;path/filename.erg&#39;</span> <span class="p">)</span>
+</pre></div>
+</div>
+<p>See e.g. <a class="reference external" href="http://graphmod.ics.uci.edu/group/Ergo_file_format">http://graphmod.ics.uci.edu/group/Ergo_file_format</a> for details</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readEvidence10">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readEvidence10</code><span class="sig-paren">(</span><em>evidence_file</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readEvidence10"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readEvidence10" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read UAI-2010 evidence file</p>
+<p>The 2010 specification allowed multiple evidence configurations in the same file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span> <span class="n">evList</span> <span class="o">=</span> <span class="n">readEvidence10</span><span class="p">(</span><span class="s1">&#39;path/file.uai.evid&#39;</span><span class="p">)</span> 
+</pre></div>
+</div>
+<p>Returns a list of evidence configurations; evList[i] is a dictionary, { Xi : xi , … } 
+indicating that variable Xi = value xi.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readEvidence14">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readEvidence14</code><span class="sig-paren">(</span><em>evidence_file</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readEvidence14"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readEvidence14" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a UAI-2014 format evidence file</p>
+<p>The 2014 specification allowed only one evidence configuration per file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ev</span> <span class="o">=</span> <span class="n">readEvidence14</span><span class="p">(</span><span class="s1">&#39;path/file.uai.evid&#39;</span><span class="p">)</span> 
+</pre></div>
+</div>
+<p>Returns an evidence configuration as a dictionary, { Xi : xi , … }, 
+indicating that variable Xi = value xi.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readFileByTokens">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readFileByTokens</code><span class="sig-paren">(</span><em>path</em>, <em>specials=[]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readFileByTokens"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readFileByTokens" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helper function for parsing pyGM file formats</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readFileByTokensNEW">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readFileByTokensNEW</code><span class="sig-paren">(</span><em>path</em>, <em>specials=[]</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readFileByTokensNEW"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readFileByTokensNEW" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helper function for parsing pyGM file formats</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readLimid">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readLimid</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readLimid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readLimid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a LIMID file (Maua format)</p>
+<p>Example: get CPTs for chance nodes C, uniform policies D, and utilities U:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span> <span class="n">C</span><span class="p">,</span><span class="n">D</span><span class="p">,</span><span class="n">U</span> <span class="o">=</span> <span class="n">readLimid</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> 
+</pre></div>
+</div>
+<p>See e.g. <a class="reference external" href="https://github.com/denismaua/kpu-pp">https://github.com/denismaua/kpu-pp</a>
+TODO: may have an error in variable orderings?  Hard to tell from Denis’ page.
+TODO: seems to expect multiplicative utility functions?</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readLimidCRA">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readLimidCRA</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readLimidCRA"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readLimidCRA" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a LIMID file specified by our format with Charles River.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">fChance</span><span class="p">,</span><span class="n">fDecision</span><span class="p">,</span><span class="n">fUtil</span> <span class="o">=</span> <span class="n">readLimidCRA</span><span class="p">(</span> <span class="s1">&#39;path/filename.uai&#39;</span> <span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readOrder">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readOrder</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readOrder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readOrder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read an elimination order from a file</p>
+<p>Elimination orders are stored as unknown length vectors, format “[nvar] [v0] [v1] … [vn]”</p>
+<p>Note: the same file format may also be useful for MPE configurations, etc.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readTEST">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readTEST</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readTEST"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readTEST" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a collection (list) of factors specified in UAI (2006-?) format</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">factor_list</span> <span class="o">=</span> <span class="n">readUai</span><span class="p">(</span> <span class="s1">&#39;path/filename.uai&#39;</span> <span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readUai">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readUai</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readUai"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readUai" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a collection (list) of factors specified in UAI (2006-?) format</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">factor_list</span> <span class="o">=</span> <span class="n">readUai</span><span class="p">(</span> <span class="s1">&#39;path/filename.uai&#39;</span> <span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.readWCSP">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">readWCSP</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#readWCSP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.readWCSP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read in a weighted CSP (list of neg-log factors) specified in WCSP format</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">factor_list</span><span class="p">,</span><span class="n">name</span><span class="p">,</span><span class="n">upperbound</span> <span class="o">=</span> <span class="n">readWCSP</span><span class="p">(</span> <span class="s1">&#39;path/filename.wcsp&#39;</span> <span class="p">)</span>
+</pre></div>
+</div>
+<p>See e.g. <a class="reference external" href="http://graphmod.ics.uci.edu/group/WCSP_file_format">http://graphmod.ics.uci.edu/group/WCSP_file_format</a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.writeOrder">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">writeOrder</code><span class="sig-paren">(</span><em>filename</em>, <em>order</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#writeOrder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.writeOrder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write an elimination order (or other vector) to a file</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.writeUai">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">writeUai</code><span class="sig-paren">(</span><em>filename</em>, <em>factors</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#writeUai"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.writeUai" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write a list of factors to &lt;filename&gt; in the UAI competition format</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyGM.filetypes.writeWCSP">
+<code class="descclassname">pyGM.filetypes.</code><code class="descname">writeWCSP</code><span class="sig-paren">(</span><em>filename</em>, <em>factors</em>, <em>upper_bound=None</em>, <em>use_float=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyGM/filetypes.html#writeWCSP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyGM.filetypes.writeWCSP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write ‘filename’ in weighted CSP format</p>
+<p>(see <a class="reference external" href="http://graphmod.ics.uci.edu/group/WCSP_file_format">http://graphmod.ics.uci.edu/group/WCSP_file_format</a>)</p>
+</dd></dl>
+
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pyGM</a></h1>
+
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=&repo=&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Factors overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="factor.html">Factor methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graphmodel.html">GraphModel class</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">File IO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="draw.html">Drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellaneous</a></li>
+<li class="toctree-l1"><a class="reference internal" href="csp.html">CSP functions</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="graphmodel.html" title="previous chapter">pyGM: Graphical Models</a></li>
+      <li>Next: <a href="draw.html" title="next chapter">pyGM: Drawing</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Alexander Ihler.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/filetypes.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

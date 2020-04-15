@@ -62,6 +62,7 @@ def readTEST(filename):
   """Read in a collection (list) of factors specified in UAI (2006-?) format
 
   Example:
+
   >>> factor_list = readUai( 'path/filename.uai' )
   """
   dims = []           # store dimension (# of states) of the variables
@@ -151,6 +152,7 @@ def readUai(filename):
   """Read in a collection (list) of factors specified in UAI (2006-?) format
 
   Example:
+
   >>> factor_list = readUai( 'path/filename.uai' )
   """
   dims = []           # store dimension (# of states) of the variables
@@ -191,7 +193,8 @@ def readUai(filename):
 def readEvidence10(evidence_file):
   """Read UAI-2010 evidence file
 
-  The 2010 specification allowed multiple evidence configurations in the same file.
+  The 2010 specification allowed multiple evidence configurations in the same file:
+
   >>>  evList = readEvidence10('path/file.uai.evid') 
 
   Returns a list of evidence configurations; evList[i] is a dictionary, { Xi : xi , ... } 
@@ -214,7 +217,8 @@ def readEvidence10(evidence_file):
 def readEvidence14(evidence_file):
   """Read a UAI-2014 format evidence file
 
-  The 2014 specification allowed only one evidence configuration per file.
+  The 2014 specification allowed only one evidence configuration per file:
+
   >>> ev = readEvidence14('path/file.uai.evid') 
 
   Returns an evidence configuration as a dictionary, { Xi : xi , ... }, 
@@ -259,6 +263,7 @@ def readErgo(filename):
   """ Read in a Bayesian network (list of conditional probabilities) specified in ERGO format
 
   Example:
+
   >>> factor_list,names,labels = readErgo( 'path/filename.erg' )
 
   See e.g. http://graphmod.ics.uci.edu/group/Ergo_file_format for details
@@ -305,6 +310,7 @@ def readWCSP(filename):
   """ Read in a weighted CSP (list of neg-log factors) specified in WCSP format
   
   Example:
+
   >>> factor_list,name,upperbound = readWCSP( 'path/filename.wcsp' )
  
   See e.g. http://graphmod.ics.uci.edu/group/WCSP_file_format
@@ -430,6 +436,7 @@ def readLimid(filename):
   """Read in a LIMID file (Maua format)
 
   Example: get CPTs for chance nodes C, uniform policies D, and utilities U:
+
   >>>  C,D,U = readLimid(filename) 
 
   See e.g. https://github.com/denismaua/kpu-pp
@@ -485,58 +492,63 @@ def readLimid(filename):
 
 
 def Limid2MMAP(C,D,U):
-  """Convert LIMID factors into MMAP factors & query variable list  (Not Implemented)
+  """Convert LIMID factors into MMAP factors & query variable list
 
   Example:
+
+  >>> C,D,U = readLimid(filename)
   >>> factors,query = Limid2MMAP(C,D,U) 
 
   See also readLimid().
-
-  TODO (done): add additive utility transformation?  Maua spec seems to be multiplicative?
   """
   nC,nD,nU = len(C),len(D),len(U)
-  nV = nC+nD
-  X = [None]*nV
-  for f in C+D:              # extract variables from chance & decision factors
-    for v in f.vars:
-      X[v.label] = v
-  nxt = nV
-  DD = []
-  Q  = []
-  for d in range(nD):        # now run through each decision & create MMAP policy vars
-    dd = nC+d
-    par = D[d].vars - [dd]
-    #print "Processing ",dd," parents ",par
+  from .graphmodel import GraphModel
+  model = GraphModel( C + [Factor(d,1.) for d in D] )  # "base" model of chance & decision f'ns
+  X = [None] * (max([x.label for x in model.X])+1)
+  for x in model.X: X[x.label]=x
+  nxt = len(X)
+  DD,Q = [],[]
+
+  for d in D:
+    par, dd = VarSet(d[:-1]), d[-1]   # decision var is last in list
     if par.nrStates()==1:   # no parents => decision variable = map variable
       #DD.append( D[d] )     # don't need to keep factor; do mark variable in query
-      Q.append(dd)
+      Q.append(dd.label)
       continue              # otherwise, create one map var per config, for that policy
     for p in range(par.nrStates()):
-      X.append( Var(nxt,X[dd].states) )   # create MAP var for policy
-      #print "  new query var ",nxt
-      cliq = [v for v in par]
-      cliq.extend( [X[dd],X[nxt]] )
+      X.append( Var(nxt,X[dd].states) )           # create MAP var for policy
+      cliq = [v for v in par] + [X[dd],X[nxt]]    # factor includes parents, policy var, and final decision
       tab = np.ones( (par.nrStates(),) + (X[dd].states,X[dd].states) )
-      tab[p,:,:] = np.eye(X[dd].states)
+      tab[p,:,:] = np.eye(X[dd].states)           # for par config p, final decision = policy var; ow anything OK
       tab = tab.reshape( par.dims() + (X[dd].states,X[dd].states) )
-      tab = np.squeeze(tab)
+      tab = np.squeeze(tab)                       # now build the factor (may require permuting axes)
       DD.append( Factor(VarSet(cliq), np.transpose(tab, tuple(np.argsort([v.label for v in cliq]))) ) )
-      Q.append(nxt)
+      Q.append(nxt)                               # policy var is part of the MMAP query
       nxt += 1
-  z = Var(nxt, nU)
-  fZ = Factor(z, 1.)
-  for u in range(nU):
-    tmp = U[u]
-    newarr = np.ones( (tmp.vars.nrStates(),nU) )
-    newarr[:,u] = tmp.table.ravel()
-    U[u] = Factor( [v for v in tmp.vars]+[z], newarr.ravel() )
-  return C+DD+U+[fZ], Q
+  if True: #latent == 'joint':
+    z = Var(nxt, nU)
+    UU = [None]*nU
+    #fZ = Factor(z, 1.)
+    for i,u in enumerate(U):
+      if (u.min() < 0): raise ValueError("Utility {} has negative values!".format(str(u)))
+      UU[i] = Factor( [v for v in u.vars]+[z], 1. )   # go thru constructor to ensure orderMethod match
+      newarr = UU[i].table.reshape( (u.vars.nrStates(),nU) )
+      newarr[:,i] = u.table.ravel()
+      UU[i] = Factor( [v for v in u.vars]+[z], newarr.reshape(UU[i].table.shape) )
+  else:   # latent == 'chain' ??
+    for u in range(nU):
+      # TODO: complete "chain" version of latent variable
+      zi = Var(nxt,2)
+      # add factor p(zi|zi-1)*U
+      
+  return C+DD+UU, Q
     
 
 def readLimidCRA(filename):
   """Read in a LIMID file specified by our format with Charles River.
 
   Example:
+
   >>> fChance,fDecision,fUtil = readLimidCRA( 'path/filename.uai' )
   """
   dims = []           # store dimension (# of states) of the variables
@@ -585,6 +597,7 @@ def LimidCRA2MMAP(C,D,U):
   """Convert CRA LIMID factors into MMAP factors & query variable list  (Not Implemented)
 
   Example:
+
   >>> factors,query = LimidCRA2MMAP(C,D,U) 
 
   See also readLimidCRA().
@@ -604,14 +617,14 @@ def LimidCRA2MMAP(C,D,U):
     dd = D[d][-1]                # ??? Last variable is decision ID?
     if not dd in X: continue     # No probability or utility depends on the decision?
     par = VarSet([X[v] for v in D[d][:-1]]) 
-    #print "Processing ",dd," parents ",par
+    #print("Processing ",dd," parents ",par)
     if par.nrStates()==1:   # no parents => decision variable = map variable
       #DD.append( D[d] )     # don't need to keep factor; do mark variable in query
       Q.append(dd)
       continue              # otherwise, create one map var per config, for that policy
     for p in range(par.nrStates()):
       X[nxt] = Var(nxt,X[dd].states)    # create MAP var for policy
-      #print "  new query var ",nxt
+      #print("  new query var ",nxt)
       cliq = D[d][:-1]  
       cliq.extend( [X[dd],X[nxt]] )
       tab = np.ones( (par.nrStates(),) + (X[dd].states,X[dd].states) )
