@@ -1,6 +1,5 @@
 numpy >= 1.18
 scipy >= 1.4
 sortedcontainers >= 1.5.7
-itertools
 networkx == 2.4
 
