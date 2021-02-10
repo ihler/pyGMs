@@ -21,18 +21,51 @@ def eqtol(A,B,tol=1e-6):
     return (A-B).abs().max() < tol;
 
 
-def loglikelihood(model, data, logZ=None):
+def __old_loglikelihood(model, data, logZ=None):
     LL = 0.0;
     if logZ is None: 
         tmp = GraphModel(model.factors)  # copy the graphical model and do VE
         sumElim = lambda F,Xlist: F.sum(Xlist)
-        tmp.eliminate( eliminationOrder(model,'wtminfill') , sumElim )
+        tmp.eliminate( eliminationOrder(model,'wtminfill')[0] , sumElim )
         logZ = tmp.logValue([])
     for s in range(len(data)):
         LL += model.logValue(data[s])
         LL -= logZ
     LL /= len(data)
     return LL
+
+
+def loglikelihood(model, data, logZ=None):
+    """loglikelihood(model, data, logZ): compute the log-likelihood of each data point
+       model: GraphModel object (or something with logValue() function)
+       data: (m x n) numpy array of m data samples of n variables
+       logZ: partition function of model if known (otherwise VE is performed)
+    """
+    if logZ is None: 
+        tmp = GraphModel(model.factors)  # copy the graphical model and do VE
+        tmp.eliminate( eliminationOrder(model,'wtminfill')[0] , 'sum' )
+        logZ = tmp.logValue([])
+    LL = model.logValue(data.T).sum(1) - logZ
+    return LL
+
+
+def pseudologlikelihood(model, data):
+    """pseudologlikelihood(model, data): compute the pseudo (log)likelihood value of each data point
+       model: GraphModel object (or something with factorsWith() function)
+       data: (m x n) numpy array of m data samples of n variables
+    """
+    def conditional(factor,i,x):   # helper function to compute conditional slice of a factor
+        return factor.t[tuple(x[v] if v!=i else slice(v.states) for v in factor.vars)]
+
+    PLL = np.zeros( data.shape )
+    for i in range(data.shape[1]):  # for each variable:
+        flist = model.factorsWith(i, copy=False)
+        for j in range(data.shape[0]):
+            pXi = 1.
+            for f in flist: pXi *= conditional(f,i,data[j])
+            PLL[j,i] = np.log( pXi[data[j,i]]/pXi.sum() );
+    return PLL.sum(1);
+
 
 
 ##############################################
@@ -80,6 +113,7 @@ def boltzmann(theta_ij):
 
 # TODO: update to accept either a factor list or a graphical model
 # TODO: update to check for isLog flag
+# TODO: add transform for data (x-configuration) to feature indicators?
 
 def vectorize(factors, features, default=0.0):
   """Return a vectorization of the model with "factors", under the specified set of base features"""
@@ -97,7 +131,7 @@ def vectorize(factors, features, default=0.0):
   return theta
 
 def devectorize(theta, features, default=0.0, tolerance=0.0):
-  """Return a vectorization of the model with "factors", under the specified set of base features"""
+  """Return a list of factors from a vectorized version using the specified set of base features"""
   t = 0;
   factors = []
   for u in features:

@@ -13,6 +13,8 @@ def drawMarkovGraph(model,**kwargs):
     """
     # TODO: fix defaults; specify shape, size etc. consistent with FG version
     import networkx as nx
+    import copy
+    kwargs = copy.copy(kwargs);  # make a copy of the arguments dict for mutation
     G = nx.Graph()
     G.add_nodes_from( [v.label for v in model.X if v.states > 1] )  # only non-trivial vars
     for f in model.factors:
@@ -21,6 +23,8 @@ def drawMarkovGraph(model,**kwargs):
           if (v1 != v2): G.add_edge(v1.label,v2.label)
     kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in G.nodes()})
     kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
+    kwargs.pop('var_labels',None);  # remove artificial "var_labels" entry)
+    kwargs['edgecolors'] = kwargs.get('edgecolors','k')
     nx.draw(G,**kwargs)
     return G
 
@@ -52,6 +56,7 @@ def drawFactorGraph(model,var_color='w',factor_color=(.2,.2,.8),**kwargs):
     if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
     kwargs['var_labels']  = kwargs.get('var_labels',{n:n for n in vNodes})
     kwargs['labels'] = kwargs.get('var_labels',{})
+    kwargs['edgecolors'] = kwargs.get('edgecolors','k')
     nx.draw_networkx(G, nodelist=vNodes,node_color=var_color,**kwargs)
     kwargs['labels'] = kwargs.get('factor_labels',{})    # TODO: need to transform?
     nx.draw_networkx_nodes(G, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
@@ -86,6 +91,7 @@ def drawBayesNet(model,**kwargs):
     kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
     kwargs['arrowstyle'] = kwargs.get('arrowstyle','->')
     kwargs['arrowsize'] = kwargs.get('arrowsize',10)
+    kwargs['edgecolors'] = kwargs.get('edgecolors','k')
     nx.draw(G,**kwargs)
     return G
 

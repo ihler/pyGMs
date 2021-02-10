@@ -13,8 +13,8 @@ from time import time
 from sortedcontainers import SortedSet;
 from builtins import range
 
-from pyGM.factor import *
-from pyGM.graphmodel import *
+from pyGMs.factor import *
+from pyGMs.graphmodel import *
 
 
 ####### Basic sampling #########################

@@ -13,8 +13,8 @@ import numpy as np
 
 inf = float('inf')
 
-from pyGM.factor import *
-from pyGM.graphmodel import *
+from pyGMs.factor import *
+from pyGMs.graphmodel import *
 
 
 from scipy.sparse import coo_matrix as coo
@@ -89,7 +89,9 @@ class Ising(object):
     """Add a list of (binary, pairwise) factors to the model; factors are converted to Ising parameters"""
     row = np.zeros(2*len(flist),dtype=int)-1; col=row.copy(); data=np.zeros(2*len(flist));
     for k,f in enumerate(flist):
-      if not isLog: f = f.log()
+      if not isLog: 
+          if np.any(f.t<=0): f = f+1e-10;   # TODO: log nonzero tol
+          f = f.log()
       if f.nvar == 1:
         Xi = f.vars[0]
         self.h[Xi] += .5*(f[1]-f[0])
@@ -115,7 +117,9 @@ class Ising(object):
     # TODO: set entries to zero, then call self.L.eliminate_zeros()
     row = np.zeros(2*len(flist),dtype=int)-1; col=row.copy(); data=np.zeros(2*len(flist));
     for k,f in enumerate(flist):
-      if not isLog: f = f.log()
+      if not isLog: 
+          if np.any(f.t==0): f = f+1e-30;   # TODO: log nonzero tol
+          f = f.log()
       if f.nvar == 1:
         Xi = f.vars[0]
         self.h[Xi] -= .5*(f[1]-f[0])
@@ -175,7 +179,7 @@ class Ising(object):
 
   @property
   def factors(self):
-    """Return a list of factors (full tables)"""
+    """Return a list of factors (converted to full tables)"""
     X = [Var(i,2) for i in range(self.nvar)]
     factors = [Factor([],np.exp(self.c))] 
     # TODO: exclude if zero? or exclude if inf/-inf, or if in "assigned", or?
@@ -186,12 +190,14 @@ class Ising(object):
     # TODO: should we exponentiate if isLog not True? 
 
   def factorsWith(self,v,copy=True): 
+    """Return a list of factors (converted to tables) in the model that contain the variable 'v'"""
     Lv = self.L.getrow(v).tocoo();
     factors = [Factor([Var(int(v),2)],[-th,th]).exp() for th in [self.h[v]] if self.dims[i]>1]
     factors = factors + [Factor([Var(int(v),2),Var(int(j),2)],[[th,-th],[-th,th]]).exp() for j,th in zip(Lv.col,Lv.data)]
     return factors
 
   def factorsWithAny(self,vs): 
+    """Return a list of factors (converted to tables) in the model that contain any of the variables in 'vs'"""
     factors = []
     for v in vs:
       factors += [Factor([Var(int(v),2)],[-th,th]).exp() for th in [self.h[v]] if self.dims[i]>1]
@@ -201,10 +207,12 @@ class Ising(object):
     return factors
 
   def markovBlanket(self,v): 
+    """Return the Markov Blanket (list of neighbors) of a given variable in the model"""
     return VarSet([Var(int(i),2) for i in self.L.getrow(int(v)).nonzero()[1]])
     #return self.L.getrow(int(v)).nonzero()[1].astype(int)
 
   def degree(self, v=None):
+    """Return the degree (number of neighbors) of one or more variables (default: all)"""
     if v is None: return arr((self.L>0).sum(1)).reshape(-1);
     else:         return (self.L[i,:]>0).sum();
 
@@ -257,6 +265,7 @@ class Ising(object):
     # TODO:  "remove" variable by setting states = 0?  "known value" = 0?
 
   def joint(self): 
+    """Return the (possibly intractably large) joint probability table for the Ising model"""
     return GraphModel(self.factors).joint();
 
   def connectedComponents(self):
@@ -279,9 +288,12 @@ class Ising(object):
     return components
 
   def nxMarkovGraph(self, all_vars=False):
+    """Return a networkx object representing the Markov graph of the Ising model"""
+    import networkx as nx
     return nx.from_scipy_sparse_matrix(self.L!=0)
     
   def pseudolikelihood(self, data):
+    """Compute the pseudo (log) likelihood, \sum_i \sum_j \log p(x^{(j)}_i | x^{(j)}_{\neg i})"""
     data = toPM(data);                    # interface glue: convert {0,1} to {-1,+1}
     r = self.L.dot(data)
     r += self.h.reshape(-1,1) if len(data.shape)==2 else self.h
@@ -293,6 +305,9 @@ class Ising(object):
 # Likelihood eval (requires LPF estimate)
 # LBP, NMF Ising optimized versions?
 # local logreg estimates combined: average, weighted avg, min-nbrs, etc
+#   Lasso-And, Lasso-Or (see M&B or Banerjee08; W&J for ising version)
+# Structure via SDP (Banerjee08)
+# Structure via independence tests (ref?)
 # L1-regularized pseudolikelihood optimization? 
 # re-fit functions (fix nonzero structure of L): pseudolikelihood SGD; IPF for LL; moments pij/pi/pj
 # screening: find blockwise independence given regularization lambda 
@@ -303,7 +318,7 @@ class Ising(object):
     """Select a maximum likelihood tree-structured graph & parameters
       data: (n,m) nparray of m data points; values {0,1}
     """
-    
+    # TODO: add score f'n parameter, default to empirical MI?  or too complicated?
     def MI2(data, weights):
         """Estimate mutual information between all pairs of *binary* {0,1} variables"""
         pi = np.average(data.astype(float),axis=1,weights=weights)[np.newaxis,:]
@@ -335,6 +350,7 @@ class Ising(object):
 
 
 def __pll(L,h,x, L2=0):
+    """Evaluate the pseudo(log)likelihood of an Ising model (L,h).  X in {-1,+1}."""
     if len(x.shape)>1: h = h.reshape(-1,1);
     pll = -np.log(1+np.exp(-2*x*(L.dot(x)+h))).sum(0)
     if L2>0: pll += L2*(L**2).sum()
@@ -342,6 +358,7 @@ def __pll(L,h,x, L2=0):
 
 
 def __dpll(L,h,x, L2=0):
+    """Evaluate the pseudo(log)likelihood gradient of an Ising model (L,h).  X in {-1,+1}."""
     if len(x.shape)>1: h = h.reshape(-1,1);
     p = 1./(1+np.exp(2*x*(L.dot(x)+h))) # compute p(x^s_i|x^s_!i) for all i,s
     dh = 2*p*x
@@ -356,7 +373,7 @@ def __dpll(L,h,x, L2=0):
 
 
 def refit_pll_sgd(model,data, initStep=.01, maxIter=1000, verbose=False):
-    """Fit a fixed graph structure to optimize pseudo-log-likelihood (uses SGD)"""
+    """Fit a fixed graph structure to optimize pseudo-log-likelihood (uses basic SGD)"""
     data = toPM(data);
     last = 0
     for it in range(maxIter):
@@ -466,6 +483,92 @@ def fit_mweight(data, C=1., threshold=1e-4, learning_rate=None):
     L[np.abs(L)<threshold] = 0;
     L[eye,eye] = h;
     return Ising(L);
+
+
+# TODO change to "threshold" ; scale max edges by # nodes? 
+def fit_threshold(data, rho_cutoff=0., maxedges=None, diag=1e-6):
+    """Estimate an Ising model using a (trivial) thresholded inverse covariance estimate.
+    data: (n,m) array of m data points in {0,1}
+    rho_cutoff: minimum value of a non-zero pairwise conditional corrrelation (larger = sparser)
+    maxedges: maximum number of edges to keep (smaller = sparser)
+    """
+    from scipy.linalg import inv as scipy_inv
+    n,m = data.shape
+    sig = np.cov(data,ddof=0,aweights=None) + diag*np.eye(n);
+    J   = -scipy_inv(sig);  J = .5*(J+J.T);            # symmetrize just in case
+    Jdiag = J[range(n),range(n)]; J[range(n),range(n)] = 0.   # zero diagonal for threshold op
+    if maxedges is not None:
+      if maxedges > J.size: rho_cutoff = 0.
+      else: rho_cutoff = max(rho_cutoff, -np.sort(np.abs(J).reshape(-1))[2*maxedges])
+    J[ np.abs(J) <= rho_cutoff ] = 0.
+    J[range(n),range(n)] = Jdiag;                             # restore diagonal
+    J[range(n),range(n)] -= J.dot(np.mean(data,1))            # add singleton terms (TODO: CHECK)
+    return Ising(J)
+
+def fit_chowliu(data, penalty=0, weights=None):
+    """Estimate an Ising model using Chow-Liu's max likelihood tree structure & parameters
+      data: (n,m) nparray of m data points; values {0,1}
+      penalty: non-negative penalty on the MI (may give a disconnected / forest graph)
+    """
+    # TODO: add score f'n parameter, default to empirical MI?  or too complicated?
+    def MI2(data, weights, eps=1e-10):
+        """Estimate mutual information between all pairs of *binary* {0,1} variables"""
+        pi = np.average(data.astype(float),axis=1,weights=weights)[np.newaxis,:]
+        pij = np.cov(data,ddof=0,aweights=weights) + (pi.T.dot(pi));
+        p = np.stack( (pij, pi-pij, pi.T-pij, 1+pij-pi-pi.T), axis=2)
+        p2 = pi.T.dot(pi)
+        q = np.stack( (p2,pi-p2,pi.T-p2,1+p2-pi-pi.T), axis=2)
+        MI = (p*(np.log(p+eps)-np.log(q+eps))).sum(axis=2)
+        return MI,pij,pi[0]
+        
+    n,m = data.shape
+    MI, pij,pi = MI2(data, weights)       # data should be 0/1, not -1/+1
+    from scipy.sparse.csgraph import minimum_spanning_tree as mst
+    tree = mst(penalty-MI).tocoo();
+    factors = [Factor([Var(i,2)], [1-pi[i],pi[i]]) for i in range(n)]
+    for i,j,w in zip(tree.row,tree.col,tree.data):
+        if w>0: continue
+        (i,j)=(int(i),int(j)) if i<j else (int(j),int(i))
+        tij = [1+pij[i,j]-pi[i]-pi[j], pi[i]-pij[i,j], pi[j]-pij[i,j], pij[i,j]]
+        fij = Factor([Var(i,2),Var(j,2)],tij);
+        fij = fij / fij.sum([i]) / fij.sum([j])
+        factors.append(fij)
+    return Ising(factors)
+
+def fit_greedy(data, nnbr=10, threshold=0.05, refit=refit_pll):
+    """Estimate an Ising model using Bresler's greedy edge selection approach
+      data: (n,m) nparray of m data points; values {0,1}
+      nnbr: maximum number of neighbors to allow for any node
+      threshold: expected variation threshold to declare an edge (in [0,1])
+      refit: function of (model,data) to optimize parameter values given graph structure
+    """
+    n,m = data.shape;
+    L = np.zeros((n,n))    # initialize parameters
+    scores = np.zeros(n)   
+    data = data.astype(int)
+    for i in range(n):
+        Ni = []
+        while (len(Ni)<nnbr):
+            Vi = (0*data[i,:] + sum(data[j,:]*(2**jj) for jj,j in enumerate(Ni))).astype(int)
+            Vsz = int(Vi.max()+1)
+            for j in range(n):
+                if j==i or j in Ni: scores[j]=0.; continue
+                pIJV = Factor( [Var(0,2),Var(1,2),Var(2,Vsz)] , 0.)
+                # pIJV[data[i,:],data[j,:],Vi] += 1.  # Test??
+                for k in range(m): pIJV[data[i,k],data[j,k],Vi[k]] += 1.
+                pV = pIJV.marginal([2]); pV /= (pV.sum()+1e-20);
+                pIJV /= (pIJV.sum([0])+1e-20)
+                scores[j] = ((pIJV.condition({0:1,1:1})-pIJV.condition({0:1,1:0})).abs()*pV).sum()
+            jmax = int(np.argmax(scores))
+            if scores[jmax] < threshold: break
+            Ni.append(jmax)
+        # TODO: prune back each list?
+        #print(i," : ",Ni)
+        L[i,Ni] = 1.
+    L = L*L.T  # "and" connectivity: keep only if edges (i,j) and (j,i) present?
+    model = Ising(L);
+    refit(model,data)
+    return model
 
 
 def __Bethe(ising,R,mu,bel=None):

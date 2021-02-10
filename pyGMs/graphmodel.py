@@ -14,7 +14,7 @@ from sortedcontainers import SortedListWithKey;
 
 inf = float('inf')
 
-from pyGM.factor import *
+from pyGMs.factor import *
 
 
 
@@ -100,9 +100,9 @@ class GraphModel(object):
       # TODO: if constant do something else?  (Currently just leave it in factors list)
       for v in reversed(f.vars):
         if (v.label >= len(self.X)): 
-          self.X.extend( [Var(i,0) for i in range(len(self.X),v.label+1) ] )
+          self.X.extend( [Var(i,1) for i in range(len(self.X),v.label+1) ] )
           self.factorsByVar.extend( [ factorSet() for i in range(len(self.factorsByVar),v.label+1) ] )
-        if self.X[v].states == 0: self.X[v] = v   # copy variable info if undefined, then check:
+        if self.X[v].states <= 1: self.X[v] = v   # copy variable info if undefined, then check:
         if self.X[v].states != v.states: raise ValueError('Incorrect # of states',v,self.X[v])
         self.factorsByVar[v].add(f)
     self.sig = np.random.rand()     # TODO: check if structure is / can be preserved?
@@ -267,8 +267,8 @@ class GraphModel(object):
 
     Args:
       elimVars (iterable): list of variables to eliminate (in order of elimination)
-      elimOp (str or lambda-fn): function to eliminate variable v from factor F; 'max', 'min', 'sum', 'lse',
-      or a user-defined custom function, e.g., 'lambda F,v: ...'
+      elimOp (str or function): function to eliminate variable v from factor F; 'max', 'min', 'sum', 'lse',
+      or a user-defined custom function, called as "elimOp(F,v)" and returning a new Factor.
     """
     if isinstance(elimVars,Var)|isinstance(elimVars,int): elimVars = [elimVars]   # check for single-var case
     if type(elimOp) is str:    # Basic elimination operators can be specified by a string
@@ -309,7 +309,7 @@ class GraphModel(object):
     X = set(self.X)
     while X:
         Xi = X.pop()
-        if Xi.states < 1: continue    # don't include missing variables 
+        if Xi.states <= 1: continue   # don't include missing or assigned variables 
         group = {Xi}                  # start a new group with this variable
         queue = [Xi]                  # do DFS on the graph from Xi to find its connected component:
         while queue:
@@ -854,8 +854,7 @@ def factorOrder(factors, varOrder):
 def sampleSequential(model, varOrder, factorOrder=None):
   """Draw a configuration X sequentially from the model factors.
  
-  Returns xs,logQ  (tuple): the sampled config and its log-probability under the sampling distribution
-  TODO: backwards from convention...
+  Returns logQ,xs  (tuple): the sampled config xs and its log-probability under the sampling distribution
   """
   if factorOrder is None: factorOrder = []
   if len(factorOrder)==0:
@@ -878,7 +877,7 @@ def sampleSequential(model, varOrder, factorOrder=None):
     s[ xi ], = Pxi.sample(Z=Zi)  # draw sample for i'th variable
     lnP += np.log( Pxi[s[xi]] / Zi )
   s_list = [ s[i] for i in range(len(s)) ]
-  return s_list, lnP   # TODO: backwards?
+  return lnP, s_list   
    
 
 

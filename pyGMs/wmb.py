@@ -83,6 +83,7 @@ class WMB(object):
         self.matches = [ [] for x in range(model.nvar) ] # matching sets for each bucket
         self.setWeights(weights)   # TODO: duplicate to initialize (!)
         for f in model.factors:
+            if len(f.vars)==0: continue;      #TODO: should add anyway (somewhere)
             n = self.addClique(f.vars)
             if attach: n.theta += f.log()                 # include log f(x) in node's log-factor
             n.originals.append(f)              # append (pointer to) original f for later reference

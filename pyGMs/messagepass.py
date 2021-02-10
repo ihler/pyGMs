@@ -2,8 +2,8 @@ import numpy as np
 import time as time
 from sortedcontainers import SortedSet;
 
-from pyGM.factor import *
-from pyGM.graphmodel import *
+from pyGMs.factor import *
+from pyGMs.graphmodel import *
 from builtins import range
 
 inf = float('inf')

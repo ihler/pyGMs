@@ -9,7 +9,8 @@ being developed for use in teaching, as well as prototyping for research.
 The code currently uses [NumPy](http://www.numpy.org/) for representing and
 operating on the table-based representation of discrete factors, and
 [SortedContainers](https://pypi.python.org/pypi/sortedcontainers) for some
-internal representations.
+internal representations.  Smaller portions use [networkx](https://networkx.org/)
+and [scipy](https://www.scipy.org/) as well.
 
 ## Installation
 

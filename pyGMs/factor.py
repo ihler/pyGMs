@@ -12,10 +12,10 @@ import numpy as np
 from sortedcontainers import SortedSet as sset
 
 try:
-  from pyGM.varset_c import Var,VarSet
+  from pyGMs.varset_c import Var,VarSet
 except ImportError:
   #print "Compiled version not loaded; importing python version"
-  from pyGM.varset_py import Var,VarSet    # sortedcontainers version
+  from pyGMs.varset_py import Var,VarSet    # sortedcontainers version
   #from .varset_py2 import Var,VarSet  # numpy array version
 
 
@@ -110,6 +110,22 @@ class Factor(object):
   def __str__(self):
     """Basic string representation: scope (varset) only"""
     return 'Factor({:s})'.format(str(self.v))
+
+  def latex(self, valueformat="0.4f", factorname="$f(x)$", varnames=None):
+    """Return string containing latex code for table values.
+      factorname : string for header of value column
+      varnames : dict mapping variable ID to string for that column (default $x_i$ via None)
+      valueformat : string formatter for values in value column; default "0.4f"
+    """
+    tex = "\\begin{tabular}[t]{" + "".join(["c" for v in self.v]) + "|c}\n"
+    #tex += " & ".join(["$x"+str(int(v))+"$" for v in self.v]) + " & $f_{"+"".join([str(int(v)) for v in self.v])+"}$ \\\\ \\hline \n"
+    if varnames is None: varnames = {v:"$x_{"+str(int(v))+"}$" for v in self.v}
+    tex += " & ".join([varnames[v] for v in self.v]) + " & "+factorname+" \\\\ \\hline \n"
+    for s in range(self.numel()):
+        tex += " & ".join([str(si) for si in self.v.ind2sub(s)]) + " & " + ("{:"+valueformat+"}").format(self[s]) + "\\\\ \n"
+    tex += "\\end{tabular} \n"
+    return tex
+
 
   @property
   def vars(self):
