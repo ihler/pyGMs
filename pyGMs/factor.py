@@ -3,14 +3,15 @@ factor.py
 
 Defines variables, variable sets, and dense factors over discrete variables (tables) for graphical models
 
-Version 0.0.1 (2015-09-28)
-(c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
+Version 0.1.0 (2021-03-25)
+(c) 2015-2021 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 import numpy as np
 #import autograd.numpy as np
 from sortedcontainers import SortedSet as sset
 
+## Under testing: cython-compiled variable sets for faster operations
 try:
   from pyGMs.varset_c import Var,VarSet
 except ImportError:
@@ -113,9 +114,10 @@ class Factor(object):
 
   def latex(self, valueformat="0.4f", factorname="$f(x)$", varnames=None):
     """Return string containing latex code for table values.
-      factorname : string for header of value column
-      varnames : dict mapping variable ID to string for that column (default $x_i$ via None)
+    Arguments:
       valueformat : string formatter for values in value column; default "0.4f"
+      factorname  : string for header of value column
+      varnames    : dict mapping variable ID to string for that column (defaults to $x_i$ if None)
     """
     tex = "\\begin{tabular}[t]{" + "".join(["c" for v in self.v]) + "|c}\n"
     #tex += " & ".join(["$x"+str(int(v))+"$" for v in self.v]) + " & $f_{"+"".join([str(int(v)) for v in self.v])+"}$ \\\\ \\hline \n"
@@ -165,6 +167,7 @@ class Factor(object):
   ################## METHODS ##########################################
   def __getitem__(self,loc):
     """Accessor: F[x1,x2] = F[sub2ind(x1,x2)] = F(X1=x1,X2=x2)"""
+    if isinstance(loc, dict): return self.valueMap(loc)
     if self.t.ndim == 1 or isinstance(loc, (tuple, list)):
       return self.t[loc]
     else:
@@ -175,6 +178,7 @@ class Factor(object):
 
   def __setitem__(self,loc,val):
     """Assign values of the factor: F[i,j,k] = F[idx] = val if idx=sub2ind(i,j,k)"""
+    if isinstance(loc, dict): return self.setValueMap(loc,val)
     if self.t.ndim == 1 or isinstance(loc, (tuple, list)):
       self.t[loc] = val
     else:
@@ -184,7 +188,16 @@ class Factor(object):
       except ValueError:
         raise IndexError("Index {} invalid for table with size {}".format(loc,self.t.shape))
 
-  value = __getitem__        # def f.value(loc): Alternate name for __getitem__
+  #value = __getitem__        # def f.value(loc): Alternate name for __getitem__
+  def value(self,x):
+    """Type-safe version of __getitem__: returns scalar float entry of table at tuple x, or exception"""
+    if self.nvar == 0: return self.t[0]
+    return self.t.item(x)
+
+  def setValue(self,x,val):
+    """Type-safe version of __setitem__: sets a scalar float entry of table at tuple x, or exception"""
+    self.t.itemset(x,val)
+
 
   def valueMap(self,x):
     """Accessor: F[x[i],x[j]] where i,j = F.vars, i.e, x is a map from variables to their state values"""

@@ -20,55 +20,67 @@ from .graphmodel import *
 def eqtol(A,B,tol=1e-6):
     return (A-B).abs().max() < tol;
 
+################################################################################################
+# Estimating empirical frequencies
+#
+def empirical( cliques, data, normalize=False):
+    """Compute the empirical counts of each configuration of the cliques within the data
+       Data should be integer, 0...d; any missing data (`nan') skipped (per clique)
+       cliques (list) : list of VarSets; which subsets of variables to examine
+       data (dict or (m,n) array) : data[i] is a list of Xi's values in each data point
+       normalize (bool) : divide by the number of data in each estimate?
+    """
+    factors = [None]*len(cliques)
+    for i,vs in enumerate(cliques):
+        vs_data = np.array([data[v] for v in vs])
+        if len(vs_data.shape)>1: vs_data = vs_data.T    # data axis first, now
+        factors[i] = Factor(vs, 0.)
+        for xs in vs_data:
+          if np.any(np.isnan(xs)): continue    # skip data with missing entries  
+          factors[i].t[ tuple(xs.astype(int)) ] += 1.
+        if normalize: factors[i].t /= factors[i].sum()
+    return factors 
 
-def __old_loglikelihood(model, data, logZ=None):
-    LL = 0.0;
-    if logZ is None: 
-        tmp = GraphModel(model.factors)  # copy the graphical model and do VE
-        sumElim = lambda F,Xlist: F.sum(Xlist)
-        tmp.eliminate( eliminationOrder(model,'wtminfill')[0] , sumElim )
-        logZ = tmp.logValue([])
-    for s in range(len(data)):
-        LL += model.logValue(data[s])
-        LL -= logZ
-    LL /= len(data)
-    return LL
 
+################################################################################################
+# Evaluating data likelihood of a model
+#
 
 def loglikelihood(model, data, logZ=None):
     """loglikelihood(model, data, logZ): compute the log-likelihood of each data point
        model: GraphModel object (or something with logValue() function)
-       data: (m x n) numpy array of m data samples of n variables
+       data: (n x m) numpy array of m data samples of n variables
        logZ: partition function of model if known (otherwise VE is performed)
     """
     if logZ is None: 
         tmp = GraphModel(model.factors)  # copy the graphical model and do VE
         tmp.eliminate( eliminationOrder(model,'wtminfill')[0] , 'sum' )
         logZ = tmp.logValue([])
-    LL = model.logValue(data.T).sum(1) - logZ
+    LL = model.logValue(data) - logZ
     return LL
 
 
 def pseudologlikelihood(model, data):
     """pseudologlikelihood(model, data): compute the pseudo (log)likelihood value of each data point
        model: GraphModel object (or something with factorsWith() function)
-       data: (m x n) numpy array of m data samples of n variables
+       data: (n,m) numpy array of m data samples of n variables
     """
     def conditional(factor,i,x):   # helper function to compute conditional slice of a factor
         return factor.t[tuple(x[v] if v!=i else slice(v.states) for v in factor.vars)]
 
     PLL = np.zeros( data.shape )
-    for i in range(data.shape[1]):  # for each variable:
+    for i in range(data.shape[0]):  # for each variable:
         flist = model.factorsWith(i, copy=False)
-        for j in range(data.shape[0]):
+        for s in range(data.shape[1]):
             pXi = 1.
-            for f in flist: pXi *= conditional(f,i,data[j])
-            PLL[j,i] = np.log( pXi[data[j,i]]/pXi.sum() );
-    return PLL.sum(1);
+            for f in flist: pXi *= conditional(f,i,data[:,s])
+            PLL[j,i] = np.log( pXi[data[i,s]]/pXi.sum() );
+    return PLL.sum(0);
 
 
-
-##############################################
+##################################################
+# Miscellaneous random graph model constructions:
+##################################################
 def ising_grid(n=10,d=2,sigp=1.0,sigu=0.1):
   '''Return a basic Ising-like grid model.
 
@@ -100,8 +112,8 @@ def boltzmann(theta_ij):
   nzi,nzj = np.nonzero( theta_ij )
   factors = [None]*len(nzi)
   for k,i,j in enumerate(zip(nzi,nzj)):
-    if i==j: factors[k] = gm.Factor([X[i]],[0,np.exp(theta[i,i])])
-    else:    factors[k] = gm.Factor([X[i],X[j]],[0,0,0,np.exp(theta[i,j])])
+    if i==j: factors[k] = Factor([X[i]],[0,np.exp(theta[i,i])])
+    else:    factors[k] = Factor([X[i],X[j]],[0,0,0,np.exp(theta[i,j])])
   return factors
 
 

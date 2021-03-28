@@ -1,6 +1,12 @@
+"""
+Pure python implementation of variables ("id" and state size) and variable sets (sorted lists of variables
+
+"""
+
 import numpy as np
 from sortedcontainers import SortedSet as sset;
 from functools import reduce
+
 
 class Var(object):
   " ""A basic discrete random variable; a pair, (label,#states) "" "

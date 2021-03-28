@@ -256,17 +256,17 @@ class Ising(object):
     # TODO: awkward way to define this; convert to more direct implementation?
     for v in elimVars:
       if len(self.markovBlanket(v)) > 2: raise ValueError("Cannot eliminate {} with {} (>2) neighbors".format(v,len(self.markovBlanket(v))))
-      flist = self.factorsWith(v);
-      gm_model = GraphModel(flist); print(gm_model); gm_model.eliminate([v],elimOp);
-      fnew = gm_model.factors[0];
+      flist = self.factorsWith(v)
+      gm_model = GraphModel(flist); print(gm_model); gm_model.eliminate([v],elimOp)
+      fnew = gm_model.factors[0]
       self.removeFactors(flist);  # doesn't quite work? numerical roundoff issues?
       self.L[v,:] = 0; self.L[:,v] = 0; self.h[v] = 0;  # TODO: better to mark as removed? how?
-      self.addFactors([fnew]);
+      self.addFactors([fnew])
     # TODO:  "remove" variable by setting states = 0?  "known value" = 0?
 
   def joint(self): 
     """Return the (possibly intractably large) joint probability table for the Ising model"""
-    return GraphModel(self.factors).joint();
+    return GraphModel(self.factors).joint()
 
   def connectedComponents(self):
     """Find the connected components of the model's Markov graph.  Returns a list of sets of variables."""
