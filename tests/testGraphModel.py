@@ -1,7 +1,7 @@
 """
 testGraphModel.py
 
-Unit tests for pyGM graphmodel class
+Unit tests for pyGMs graphmodel class
 
 Version 0.0.1 (2015-09-28)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 import sys
 sys.path.append('../../')
-from pyGM import *
+from pyGMs import *
 
 def eq_tol(F,G,tolerance):
   if (F.nvar != G.nvar) or (F.vars != G.vars):
@@ -349,7 +349,7 @@ class testGraphModel(unittest.TestCase):
     model = GraphModel(factors)
     model.condition(evid)
     ord = [85,41,35,65,47,8,48,58,24,77,55,39,32,30,6,76,80,97,83,59,18,23,38,87,91,81,21,68,29,64,27,9,19,10,11,90,71,88,20,99,0,22,94,37,16,63,17,70,86,13,43,31,1,95,69,96,36,51,4,34,56,15,53,42,28,92,49,74,98,14,45,26,84,40,33,2,73,12,25,60,93,78,46,61,44,89,3,7,54,57,52,50,66,72,62,67,79,82,75,5]
-    from pyGM.wmb import JTree as JTree
+    from pyGMs.wmb import JTree as JTree
     jt = JTree(model,ord)      # build a junction tree and compute lnZ, p(X13,X53)
     lnZ = jt.msgForward()
     self.assertTrue( abs(lnZ - -20.477081) < tol , "lnZ {} != -20.477081".format(lnZ)) 

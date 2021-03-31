@@ -21,6 +21,7 @@ from scipy.sparse import coo_matrix as coo
 from scipy.sparse import csr_matrix as csr
 
 from numpy import asarray as arr
+from numpy import atleast_2d as twod
 
 def toPM(x):
     return 2*x-1
@@ -142,10 +143,13 @@ class Ising(object):
     return np.exp(self.logValue(x,subset))
 
   def logValue(self,x,subset=None):
+    """Evaluate log F(x) for a configuration or data set
+      x : (m,n) or (n,) array or dict : configuration(s) x to evaluate
+    """
     if subset is not None: raise NotImplementedError()    # TODO: use L[subset,subset]?
-    if isinstance(x,dict): x = toPM(np.array([x[i] for i in range(self.nvar)]))
-    else: x = toPM(arr(x))
-    r = self.L.dot(x)/2
+    if isinstance(x,dict): x = toPM(np.array([[x[i] for i in range(self.nvar)]]))
+    else: x = toPM(twod(arr(x)))
+    r = self.L.dot(x.T)/2
     if len(x.shape)==2: r += self.h.reshape(-1,1);
     else:               r += self.h;
     return (x*r).sum(0) + self.c 
@@ -252,7 +256,7 @@ class Ising(object):
     
     
 
-#  def eliminate(self, elimVars, elimOp):
+  def __TODO_eliminate(self, elimVars, elimOp):
     # TODO: awkward way to define this; convert to more direct implementation?
     for v in elimVars:
       if len(self.markovBlanket(v)) > 2: raise ValueError("Cannot eliminate {} with {} (>2) neighbors".format(v,len(self.markovBlanket(v))))
@@ -293,11 +297,14 @@ class Ising(object):
     return nx.from_scipy_sparse_matrix(self.L!=0)
     
   def pseudolikelihood(self, data):
-    """Compute the pseudo (log) likelihood, \sum_i \sum_j \log p(x^{(j)}_i | x^{(j)}_{\neg i})"""
-    data = toPM(data);                    # interface glue: convert {0,1} to {-1,+1}
-    r = self.L.dot(data)
+    """Compute the pseudo (log) likelihood, \sum_i \sum_j \log p(x^{(j)}_i | x^{(j)}_{\neg i})
+       data : (m,n) or (n,) array or dict of the values xi; values in {0,1}
+    """
+    if isinstance(data,dict): data = toPM(np.array([[data[i] for i in range(self.nvar)]]))
+    else: data = toPM(twod(data));              # interface glue: convert {0,1} to {-1,+1}
+    r = self.L.dot(data.T)
     r += self.h.reshape(-1,1) if len(data.shape)==2 else self.h
-    lnp = -np.log(1+np.exp(-2*data*r))    # ln p(x_i^(s)|x_{-i}^(s)) for all vars i, samples s
+    lnp = -np.log(1+np.exp(-2*data.T*r))    # ln p(x_i^(s)|x_{-i}^(s)) for all vars i, samples s
     return lnp.sum(axis=0)                # sum over i => pseudo-log-likelihood of each x^(s)
 
 

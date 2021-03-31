@@ -27,13 +27,14 @@ def empirical( cliques, data, normalize=False):
     """Compute the empirical counts of each configuration of the cliques within the data
        Data should be integer, 0...d; any missing data (`nan') skipped (per clique)
        cliques (list) : list of VarSets; which subsets of variables to examine
-       data (dict or (m,n) array) : data[i] is a list of Xi's values in each data point
+       data (dict or (m,n) array) : data[s,i] is the value of x^(s)_i, x_i for sample s
        normalize (bool) : divide by the number of data in each estimate?
     """
     factors = [None]*len(cliques)
     for i,vs in enumerate(cliques):
-        vs_data = np.array([data[v] for v in vs])
-        if len(vs_data.shape)>1: vs_data = vs_data.T    # data axis first, now
+        try:    vs_data = np.array([data[:,v] for v in vs])    # 2d nparray
+        except: vs_data = np.array([data[v] for v in vs])      # dict or 1d array
+        #if len(vs_data.shape)>1: vs_data = vs_data.T    # data axis first, now
         factors[i] = Factor(vs, 0.)
         for xs in vs_data:
           if np.any(np.isnan(xs)): continue    # skip data with missing entries  
@@ -63,18 +64,18 @@ def loglikelihood(model, data, logZ=None):
 def pseudologlikelihood(model, data):
     """pseudologlikelihood(model, data): compute the pseudo (log)likelihood value of each data point
        model: GraphModel object (or something with factorsWith() function)
-       data: (n,m) numpy array of m data samples of n variables
+       data: (m,n) numpy array of m data samples of n variables
     """
     def conditional(factor,i,x):   # helper function to compute conditional slice of a factor
         return factor.t[tuple(x[v] if v!=i else slice(v.states) for v in factor.vars)]
 
     PLL = np.zeros( data.shape )
-    for i in range(data.shape[0]):  # for each variable:
+    for i in range(data.shape[1]):  # for each variable:
         flist = model.factorsWith(i, copy=False)
-        for s in range(data.shape[1]):
+        for s in range(data.shape[0]):
             pXi = 1.
-            for f in flist: pXi *= conditional(f,i,data[:,s])
-            PLL[j,i] = np.log( pXi[data[i,s]]/pXi.sum() );
+            for f in flist: pXi *= conditional(f,i,data[s,:])
+            PLL[j,i] = np.log( pXi[data[s,i]]/pXi.sum() );
     return PLL.sum(0);
 
 
