@@ -152,7 +152,7 @@ class Ising(object):
     r = self.L.dot(x.T)/2
     if len(x.shape)==2: r += self.h.reshape(-1,1);
     else:               r += self.h;
-    return (x*r).sum(0) + self.c 
+    return (x.T*r).sum(0) + self.c 
 
   def isBinary(self): return True  # Check whether the model is binary (all variables binary)
   def isPairwise(self): return True # Check whether the model is pairwise (all factors pairwise)
@@ -196,7 +196,7 @@ class Ising(object):
   def factorsWith(self,v,copy=True): 
     """Return a list of factors (converted to tables) in the model that contain the variable 'v'"""
     Lv = self.L.getrow(v).tocoo();
-    factors = [Factor([Var(int(v),2)],[-th,th]).exp() for th in [self.h[v]] if self.dims[i]>1]
+    factors = [Factor([Var(int(v),2)],[-th,th]).exp() for th in [self.h[v]] if self.dims[v]>1]
     factors = factors + [Factor([Var(int(v),2),Var(int(j),2)],[[th,-th],[-th,th]]).exp() for j,th in zip(Lv.col,Lv.data)]
     return factors
 
@@ -204,10 +204,10 @@ class Ising(object):
     """Return a list of factors (converted to tables) in the model that contain any of the variables in 'vs'"""
     factors = []
     for v in vs:
-      factors += [Factor([Var(int(v),2)],[-th,th]).exp() for th in [self.h[v]] if self.dims[i]>1]
+      factors += [Factor([Var(int(v),2)],[-th,th]).exp() for th in [self.h[v]] if self.dims[v]>1]
       for u in self.markovBlanket(v):
         if u not in vs or v < u:
-          factors += [Factor([Var(int(v),2),Var(int(u),2)],[[th,-th],[-th,th]]).exp() for th in [L[v,u]] if th!=0] 
+          factors += [Factor([Var(int(v),2),Var(int(u),2)],[[th,-th],[-th,th]]).exp() for th in [self.L[v,u]] if th!=0] 
     return factors
 
   def markovBlanket(self,v): 
@@ -217,8 +217,8 @@ class Ising(object):
 
   def degree(self, v=None):
     """Return the degree (number of neighbors) of one or more variables (default: all)"""
-    if v is None: return arr((self.L>0).sum(1)).reshape(-1);
-    else:         return (self.L[i,:]>0).sum();
+    if v is None: return arr((self.L!=0).sum(1)).reshape(-1);
+    else:         return (self.L[v,:]!=0).sum();
 
   def __asFactor(i,j=None):
     # TODO: fix up to be used in above functions 
@@ -358,6 +358,7 @@ class Ising(object):
 
 def __pll(L,h,x, L2=0):
     """Evaluate the pseudo(log)likelihood of an Ising model (L,h).  X in {-1,+1}."""
+    # TODO: still expects (n,m) shaped array
     if len(x.shape)>1: h = h.reshape(-1,1);
     pll = -np.log(1+np.exp(-2*x*(L.dot(x)+h))).sum(0)
     if L2>0: pll += L2*(L**2).sum()
@@ -366,6 +367,7 @@ def __pll(L,h,x, L2=0):
 
 def __dpll(L,h,x, L2=0):
     """Evaluate the pseudo(log)likelihood gradient of an Ising model (L,h).  X in {-1,+1}."""
+    # TODO: still expects (n,m) shaped array
     if len(x.shape)>1: h = h.reshape(-1,1);
     p = 1./(1+np.exp(2*x*(L.dot(x)+h))) # compute p(x^s_i|x^s_!i) for all i,s
     dh = 2*p*x
@@ -380,8 +382,11 @@ def __dpll(L,h,x, L2=0):
 
 
 def refit_pll_sgd(model,data, initStep=.01, maxIter=1000, verbose=False):
-    """Fit a fixed graph structure to optimize pseudo-log-likelihood (uses basic SGD)"""
-    data = toPM(data);
+    """Fit a fixed graph structure to optimize pseudo-log-likelihood (uses basic SGD)
+      model : an Ising model to re-fit (will keep edge structure)
+      data  : (m,n) array of m data points with n variables (with values {0,1})
+    """
+    data = toPM(data.T);   # TODO: internal (n,m) shape
     last = 0
     for it in range(maxIter):
         stepi = 10*initStep / (10+it)
@@ -392,8 +397,11 @@ def refit_pll_sgd(model,data, initStep=.01, maxIter=1000, verbose=False):
 
 
 def refit_pll_opt(model,data):
-    """Fit a fixed graph structure to optimize pseudo-log-likelihood (uses scipy optimize)"""
-    data = toPM(data);
+    """Fit a fixed graph structure to optimize pseudo-log-likelihood (uses scipy optimize)
+      model : an Ising model to re-fit (will keep edge structure)
+      data  : (m,n) array of m data points with n variables (with values {0,1})
+    """
+    data = toPM(data.T);   # TODO: internal (n,m) shape
     import scipy.optimize
     from scipy.sparse import triu
     def to_vector(L,h):
@@ -432,12 +440,12 @@ def fit_logregL1(data, C=.01):
       C: float, sparsity penalty (smaller = sparser graph)
     """
     from sklearn.linear_model import LogisticRegression
-    n,m = data.shape
+    m,n = data.shape
   
     # TODO: just build (sparse) L directly & construct with it
     # for each Xi, estimate the neighborhood of Xi using L1-reg logistic regression:
     nbrs,th_ij,th_i = [None]*n, [None]*n, np.zeros((n,))
-    Xtr, Xtmp = toPM(data), toPM(data)  # make two copies so we can modify
+    Xtr, Xtmp = toPM(data.T), toPM(data.T)  # make two copies so we can modify; TODO: internal (n,m) shape
     for i in range(n):  
         Xtmp[i,:] = 0.        # remove ourselves
         lr = LogisticRegression(penalty='l1',C=C,solver='liblinear').fit(Xtmp.T,Xtr[i,:])
@@ -463,12 +471,12 @@ def fit_logregL1(data, C=.01):
 
 def fit_mweight(data, C=1., threshold=1e-4, learning_rate=None):
     """Estimate an Ising model using multiplicative weights (Klivans & Meca '17)
-       data: (n,m) array of m data points in {0,1}
+       data: (m,n) array of m data points in {0,1}
        C: float, sparsity bound (smaller = sparser graph)
        threshold: float, cutoff for making parameters exactly zero (larger = sparser graph)
        learning_rate: float, (1-epsilon) learning rate for "Hedge" multiplicative weights
     """
-    dataPM = toPM(data).T;
+    dataPM = toPM(data);
     m,n = dataPM.shape;
     if learning_rate is None: learning_rate = 1-np.sqrt(np.log(n)/m);
 
@@ -495,13 +503,13 @@ def fit_mweight(data, C=1., threshold=1e-4, learning_rate=None):
 # TODO change to "threshold" ; scale max edges by # nodes? 
 def fit_threshold(data, rho_cutoff=0., maxedges=None, diag=1e-6):
     """Estimate an Ising model using a (trivial) thresholded inverse covariance estimate.
-    data: (n,m) array of m data points in {0,1}
+    data: (m,n) array of m data points in {0,1}
     rho_cutoff: minimum value of a non-zero pairwise conditional corrrelation (larger = sparser)
     maxedges: maximum number of edges to keep (smaller = sparser)
     """
     from scipy.linalg import inv as scipy_inv
-    n,m = data.shape
-    sig = np.cov(data,ddof=0,aweights=None) + diag*np.eye(n);
+    m,n = data.shape
+    sig = np.cov(data.T,ddof=0,aweights=None) + diag*np.eye(n);
     J   = -scipy_inv(sig);  J = .5*(J+J.T);            # symmetrize just in case
     Jdiag = J[range(n),range(n)]; J[range(n),range(n)] = 0.   # zero diagonal for threshold op
     if maxedges is not None:
@@ -509,17 +517,18 @@ def fit_threshold(data, rho_cutoff=0., maxedges=None, diag=1e-6):
       else: rho_cutoff = max(rho_cutoff, -np.sort(np.abs(J).reshape(-1))[2*maxedges])
     J[ np.abs(J) <= rho_cutoff ] = 0.
     J[range(n),range(n)] = Jdiag;                             # restore diagonal
-    J[range(n),range(n)] -= J.dot(np.mean(data,1))            # add singleton terms (TODO: CHECK)
+    J[range(n),range(n)] -= J.dot(np.mean(data.T,1))          # add singleton terms (TODO: CHECK)
     return Ising(J)
 
 def fit_chowliu(data, penalty=0, weights=None):
     """Estimate an Ising model using Chow-Liu's max likelihood tree structure & parameters
-      data: (n,m) nparray of m data points; values {0,1}
+      data: (m,n) nparray of m data points; values {0,1}
       penalty: non-negative penalty on the MI (may give a disconnected / forest graph)
     """
     # TODO: add score f'n parameter, default to empirical MI?  or too complicated?
     def MI2(data, weights, eps=1e-10):
         """Estimate mutual information between all pairs of *binary* {0,1} variables"""
+        # TODO: expects (n,m) shape data
         pi = np.average(data.astype(float),axis=1,weights=weights)[np.newaxis,:]
         pij = np.cov(data,ddof=0,aweights=weights) + (pi.T.dot(pi));
         p = np.stack( (pij, pi-pij, pi.T-pij, 1+pij-pi-pi.T), axis=2)
@@ -528,8 +537,8 @@ def fit_chowliu(data, penalty=0, weights=None):
         MI = (p*(np.log(p+eps)-np.log(q+eps))).sum(axis=2)
         return MI,pij,pi[0]
         
-    n,m = data.shape
-    MI, pij,pi = MI2(data, weights)       # data should be 0/1, not -1/+1
+    m,n = data.shape
+    MI, pij,pi = MI2(data.T, weights)       # data should be 0/1, not -1/+1
     from scipy.sparse.csgraph import minimum_spanning_tree as mst
     tree = mst(penalty-MI).tocoo();
     factors = [Factor([Var(i,2)], [1-pi[i],pi[i]]) for i in range(n)]
@@ -544,15 +553,15 @@ def fit_chowliu(data, penalty=0, weights=None):
 
 def fit_greedy(data, nnbr=10, threshold=0.05, refit=refit_pll):
     """Estimate an Ising model using Bresler's greedy edge selection approach
-      data: (n,m) nparray of m data points; values {0,1}
+      data: (m,n) nparray of m data points; values {0,1}
       nnbr: maximum number of neighbors to allow for any node
       threshold: expected variation threshold to declare an edge (in [0,1])
       refit: function of (model,data) to optimize parameter values given graph structure
     """
-    n,m = data.shape;
+    m,n = data.shape;
     L = np.zeros((n,n))    # initialize parameters
     scores = np.zeros(n)   
-    data = data.astype(int)
+    data = data.T.astype(int)    # TODO: fix internal transpose
     for i in range(n):
         Ni = []
         while (len(Ni)<nnbr):
@@ -574,7 +583,7 @@ def fit_greedy(data, nnbr=10, threshold=0.05, refit=refit_pll):
         L[i,Ni] = 1.
     L = L*L.T  # "and" connectivity: keep only if edges (i,j) and (j,i) present?
     model = Ising(L);
-    refit(model,data)
+    refit(model,data.T)
     return model
 
 

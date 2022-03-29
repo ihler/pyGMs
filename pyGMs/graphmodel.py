@@ -17,6 +17,10 @@ inf = float('inf')
 from pyGMs.factor import *
 
 
+def _is2D(D):
+  try: next(iter(next(iter(D))))
+  except: return False
+  return True
 
 
 # Make a simple sorted set of factors, ordered by clique size, then lexicographical by scope
@@ -167,17 +171,19 @@ class GraphModel(object):
     """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x.
          If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
+    if not _is2D(x): x=[x]
     factors = self.factors if subset==None else self.factorsWithAny(subset)
-    if self.isLog: return np.exp( sum( [ f.valueMap(x) for f in factors ] ) )
-    else:          return np.product( [ f.valueMap(x) for f in factors ] )
+    if self.isLog: return np.exp( np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1) )
+    else:          return np.product( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
 
   def logValue(self,x,subset=None): 
     """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x.
          If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
+    if not _is2D(x): x=[x]
     factors = self.factors if subset==None else self.factorsWithAny(subset)
-    if self.isLog: return sum( [ f.valueMap(x) for f in factors ] ) 
-    else:          return sum( [ np.log(f.valueMap(x)) for f in factors ] )
+    if self.isLog: return np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
+    else:          return np.sum( [[ np.log(f.valueMap(xx)) for f in factors] for xx in x] ,1)
 
   def isBinary(self):   # Check whether the model is binary (all variables binary)
     """Check whether the graphical model is binary (all variables <= 2 states)"""

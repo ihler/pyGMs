@@ -128,6 +128,21 @@ class Factor(object):
     tex += "\\end{tabular} \n"
     return tex
 
+  def _repr_markdown_(self, valueformat="0.4f", factorname="$f(x)$", varnames=None):
+    """Return iPython markdown code for display
+    Arguments:
+      valueformat : string formatter for values in value column; default "0.4f"
+      factorname  : string for header of value column
+      varnames    : dict mapping variable ID to string for that column (defaults to $x_i$ if None)
+    """
+    md = ""
+    if varnames is None: varnames = {v:"X"+str(int(v))+"" for v in self.v}
+    #if varnames is None: varnames = {v:"$x_{"+str(int(v))+"}$" for v in self.v}
+    md += "| "+" | ".join([varnames[v] for v in self.v]) + " | | "+factorname+" |\n"
+    md += "| "+" | ".join([":--:" for i in range(len(self.v)+2)]) + " |\n"
+    for s in range(self.numel()):
+        md += "| "+" | ".join([str(si) for si in self.v.ind2sub(s)]) + " | | " + ("{:"+valueformat+"}").format(self[s]) + " |\n"
+    return md
 
   @property
   def vars(self):
@@ -201,6 +216,7 @@ class Factor(object):
 
   def valueMap(self,x):
     """Accessor: F[x[i],x[j]] where i,j = F.vars, i.e, x is a map from variables to their state values"""
+    ret = self.t[tuple(x[v] for v in self.v)]
     if self.nvar == 0: return self.t[0]          # if a scalar f'n, nothing to index
     return self.t[tuple(x[v] for v in self.v)]   # otherwise, find entry of table
 

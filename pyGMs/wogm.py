@@ -289,7 +289,7 @@ class WOGraphModel(GraphModel):
     self.init()
     phi_w = self.factors[0][0]
     start_time = time.time()
-    if verbose: print "Iter 0: ", phi_w
+    if verbose: print("Iter 0: ", phi_w)
     for t in xrange(1,stopIter+1):               # for each iteration:
         # Update each variable in turn:
         for Xi in self.elimOrder:                # for each variable,  TODO: use elim order
@@ -302,7 +302,7 @@ class WOGraphModel(GraphModel):
         #
         # Update the upper bound, print, and check for convergence
         prev,phi_w = phi_w,self.factors[0][0]
-        if verbose: print "[{}] Iter {} : {}".format(time.time()-start_time,t,phi_w);
+        if verbose: print("[{}] Iter {} : {}".format(time.time()-start_time,t,phi_w));
         if abs(prev - phi_w) < stopTol: break
     return phi_w
 

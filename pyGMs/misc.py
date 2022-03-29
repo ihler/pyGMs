@@ -20,6 +20,18 @@ from .graphmodel import *
 def eqtol(A,B,tol=1e-6):
     return (A-B).abs().max() < tol;
 
+
+def is2D(D):
+    """Check if a data set D is a set of configurations (2D) or a single configuration (vector, dict, etc.)
+       (checks whether first entry in iterable D is also iterable)
+    """
+    first = next(iter(D))
+    try:
+        next(iter(first))
+        return True
+    except: 
+        return False
+
 ################################################################################################
 # Estimating empirical frequencies
 #
@@ -32,9 +44,9 @@ def empirical( cliques, data, normalize=False):
     """
     factors = [None]*len(cliques)
     for i,vs in enumerate(cliques):
-        try:    vs_data = np.array([data[:,v] for v in vs])    # 2d nparray
-        except: vs_data = np.array([data[v] for v in vs])      # dict or 1d array
-        #if len(vs_data.shape)>1: vs_data = vs_data.T    # data axis first, now
+        vs = VarSet(vs)                     # make sure these are OK & sorted
+        try:    vs_data = data[:,[int(v) for v in vs]]      # 2d nparray data
+        except: vs_data = np.array([data[v] for v in vs])   # dict or 1d array
         factors[i] = Factor(vs, 0.)
         for xs in vs_data:
           if np.any(np.isnan(xs)): continue    # skip data with missing entries  
@@ -50,14 +62,15 @@ def empirical( cliques, data, normalize=False):
 def loglikelihood(model, data, logZ=None):
     """loglikelihood(model, data, logZ): compute the log-likelihood of each data point
        model: GraphModel object (or something with logValue() function)
-       data: (n x m) numpy array of m data samples of n variables
+       data: (m,n) numpy array of m data samples of n variables
        logZ: partition function of model if known (otherwise VE is performed)
     """
     if logZ is None: 
         tmp = GraphModel(model.factors)  # copy the graphical model and do VE
         tmp.eliminate( eliminationOrder(model,'wtminfill')[0] , 'sum' )
         logZ = tmp.logValue([])
-    LL = model.logValue(data) - logZ
+    #LL = model.logValue(data) - logZ
+    LL = np.array([model.logValue(d) for d in data]) - logZ
     return LL
 
 
@@ -66,6 +79,7 @@ def pseudologlikelihood(model, data):
        model: GraphModel object (or something with factorsWith() function)
        data: (m,n) numpy array of m data samples of n variables
     """
+    # TODO: check isLog?
     def conditional(factor,i,x):   # helper function to compute conditional slice of a factor
         return factor.t[tuple(x[v] if v!=i else slice(v.states) for v in factor.vars)]
 
@@ -75,8 +89,8 @@ def pseudologlikelihood(model, data):
         for s in range(data.shape[0]):
             pXi = 1.
             for f in flist: pXi *= conditional(f,i,data[s,:])
-            PLL[j,i] = np.log( pXi[data[s,i]]/pXi.sum() );
-    return PLL.sum(0);
+            PLL[s,i] = np.log( pXi[data[s,i]]/pXi.sum() );
+    return PLL.sum(1);
 
 
 ##################################################
@@ -116,6 +130,42 @@ def boltzmann(theta_ij):
     if i==j: factors[k] = Factor([X[i]],[0,np.exp(theta[i,i])])
     else:    factors[k] = Factor([X[i],X[j]],[0,0,0,np.exp(theta[i,j])])
   return factors
+
+
+
+
+def fit_chowliu(data, penalty=0, weights=None):
+    """Select a maximum likelihood tree-structured graph & parameters
+      data: (m,n) nparray of m data points (values castable to int)
+    """
+    # TODO: add score f'n parameter, default to empirical MI?  or too complicated?
+    def MId(data, weights):
+        """Estimate mutual information between all pairs of discrete variables"""
+        m,n = data.shape
+        d = data.max(0)+1
+        MI = np.zeros((n,n))
+        for i in range(n):
+          for j in range(i+1,n):
+            pij = empirical([[Var(i,d[i]),Var(j,d[j])]],data)[0]; pij+=1e-30; pij /= pij.sum()
+            MI[i,j] = (pij*(pij/pij.sum([i])/pij.sum([j])).log()).sum()
+            MI[j,i] = MI[i,j]
+        return MI,None,None
+
+    m,n = data.shape
+    d = data.max(0)+1
+    MI, _,_ = MId(data, weights)   
+    from scipy.sparse.csgraph import minimum_spanning_tree as mst
+    tree = mst(penalty-MI).tocoo();
+    factors = [empirical([[Var(i,d[i])]], data)[0] for i in range(n)]
+    for f in factors: f /= f.sum()
+    for i,j,w in zip(tree.row,tree.col,tree.data):
+        if w>0: continue
+        (i,j)=(int(i),int(j)) if i<j else (int(j),int(i))
+        fij = empirical([[Var(i,d[i]),Var(j,d[j])]], data)[0]; fij /= fij.sum()
+        fij = fij / fij.sum([i]) / fij.sum([j])
+        factors.append(fij)
+    return GraphModel(factors)
+
 
 
 ################################################################################################

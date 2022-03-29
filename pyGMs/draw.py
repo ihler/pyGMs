@@ -2,8 +2,16 @@ from .factor import *
 from .graphmodel import *
 
 
+class nxDefaults:
+  """Set networkx drawing default appearances for variable nodes, factor nodes, and edges"""
+  var = {'edgecolors':'black', 'node_color':'w', 'node_shape':'o' }
+  factor = { 'edgecolors':'black', 'node_color':[(.2,.2,.8)], 'node_shape':'s' }
+  edge = {'edge_color':'black' }
 
-def nxMarkovGraph(self, all_vars=False):
+
+
+
+def nxMarkovGraph(model, all_vars=False):
     """Get networkx Graph object of the Markov graph of the model
 
     Example:
@@ -62,6 +70,50 @@ def drawMarkovGraph(model,**kwargs):
     nx.draw(G,**kwargs)
     return G
 
+
+def drawFactorGraph2(model, voptions=None,foptions=None,eoptions=None, **kwargs):
+    """Draw a factorgraph using networkx function calls
+
+    Args:
+      var_color (str, tuple): networkx color descriptor for drawing variable nodes
+      factor_color (str, tuple): networkx color for drawing factor nodes
+      var_labels (dict): variable id to label string for variable nodes
+      factor_labels (dict): factor id to label string for factor nodes
+      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
+
+    Example:
+
+    >>> gm.drawFactorGraph(model, var_labels={0:'0', ... } )    # keyword args passed to networkx.draw()
+    """
+    import networkx as nx
+    import copy
+    kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
+    G = nx.Graph()
+    vNodes = [v.label for v in model.X if v.states > 1]   # list only non-trivial variables
+    fNodes = [-i-1 for i in range(len(model.factors))]    # use negative IDs for factors: TODO switch to "fi"?
+    G.add_nodes_from( vNodes + fNodes )
+    for i,f in enumerate(model.factors):
+      for v in f.vars:
+        G.add_edge(v.label,-i-1)
+    #
+    # Get default appearances for vars; add default labels; override / augment with "voptions"
+    vopt = copy.copy(nxDefaults.var); vopt['labels']=[v.label for v in model.X if v.states>1]
+    for arg in voptions: vopt[arg] = voptions[arg]
+    # Get default appearances for fact; add default labels; override / augment with "foptions"
+    fopt = copy.copy(nxDefaults.factor); fopt['labels']={n:n for n in vNodes}
+    for arg in voptions: vopt[arg] = voptions[arg]
+
+    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
+
+    # TODO: no longer accepts labels of subset of nodes?
+    nx.draw_networkx_nodes(G, nodelist=vNodes,**vopt,**kwargs)
+    nx.draw_networkx_nodes(G, nodelist=fNodes,**fopt,**kwargs)
+    nx.draw_networkx_edges(G, **eopt,**kwargs)
+    return G
+
+
+
+
 def drawFactorGraph(model,var_color='w',factor_color=[(.2,.2,.8)],**kwargs):
     """Draw a factorgraph using networkx function calls
 
@@ -82,7 +134,7 @@ def drawFactorGraph(model,var_color='w',factor_color=[(.2,.2,.8)],**kwargs):
     kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
     G = nx.Graph()
     vNodes = [v.label for v in model.X if v.states > 1]   # list only non-trivial variables
-    fNodes = [-i-1 for i in range(len(model.factors))]    # use negative IDs for factors
+    fNodes = [-i-1 for i in range(len(model.factors))]    # use negative IDs for factors: TODO switch to "fi"?
     G.add_nodes_from( vNodes )
     G.add_nodes_from( fNodes )
     for i,f in enumerate(model.factors):
@@ -94,10 +146,11 @@ def drawFactorGraph(model,var_color='w',factor_color=[(.2,.2,.8)],**kwargs):
     kwargs.pop('var_labels',None)   # remove artificial "var_labels" entry)
     kwargs.pop('labels',None)       #   also labels if it exists
     factor_labels = kwargs.get('factor_labels',{}); kwargs.pop('factor_labels',None);
-    edge_color = kwargs.get('edge_color','k'); kwargs.pop('edge_color',None);
-    nx.draw_networkx(G, nodelist=vNodes,node_color=var_color,edge_color=edge_color,labels=var_labels,**kwargs)
+    edge_color = kwargs.get('edge_color','k'); kwargs.pop('edge_color',None);  # colors of graph edges
+    edgecolors = kwargs.get('edgecolors','k'); kwargs.pop('edgecolors',None);  # outlines of nodes
+    nx.draw_networkx(G, nodelist=vNodes,node_color=var_color,edgecolors=edgecolors,labels=var_labels,**kwargs)
     # TODO: no longer accepts labels of subset of nodes?
-    nx.draw_networkx_nodes(G, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
+    nx.draw_networkx_nodes(G, nodelist=fNodes,edgecolors=edgecolors,node_color=factor_color,node_shape='s',**kwargs)
     nx.draw_networkx_edges(G,edge_color=edge_color,**kwargs)
     return G
 
