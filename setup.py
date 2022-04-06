@@ -9,7 +9,7 @@ setuptools.setup(
     name='pyGMs',
     #name=pyGM.__title__,
     #version=pyGM.__version__,
-    version='0.1.0',
+    version='0.1.1',
     author='Alexander Ihler',
     author_email='ihler@ics.uci.edu',
     description='Python Graphical Models Toolbox',

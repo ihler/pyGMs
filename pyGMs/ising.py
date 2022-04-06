@@ -4,7 +4,7 @@ ising.py
 Specialty graphical model class for Ising models (binary pairwise models)
 Note: uses data definition Xi in {0,1} for compatibility with other graphmodel classes
 
-Version 0.0.1 (2020-06-13)
+Version 0.1.1 (2022-04-06)
 (c) 2020 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
