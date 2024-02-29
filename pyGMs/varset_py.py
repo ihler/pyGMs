@@ -1,5 +1,5 @@
 """
-Pure python implementation of variables ("id" and state size) and variable sets (sorted lists of variables
+Pure python implementation of variables ("id" and state size) and variable sets (sorted lists of variables)
 
 """
 

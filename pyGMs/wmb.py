@@ -85,6 +85,7 @@ class WMB(object):
         for f in model.factors:
             if len(f.vars)==0: continue;      #TODO: should add anyway (somewhere)
             n = self.addClique(f.vars)
+            # TODO: check if model.isLog already when attaching...
             if attach: n.theta += f.log()                 # include log f(x) in node's log-factor
             n.originals.append(f)              # append (pointer to) original f for later reference
         # and set the weights of the buckets:
@@ -410,7 +411,7 @@ class WMB(object):
                         beliefs_b[j] = mb.theta + mb.msgBwd
                         for c in mb.children: beliefs_b[j] += c.msgFwd
                         beliefs_b[j] *= 1.0/mb.weight
-                        beliefs_b[j] -= bel[j].lse()
+                        beliefs_b[j] -= beliefs_b[j].lse()
                 # Then, update theta (parameterization) on each set in "matches"
                 if stepTheta:  
                     pass
@@ -575,7 +576,9 @@ class WMB(object):
         return sum([mb.theta.valueMap(config) for mb in self.buckets[self.priority[X]]])
 
     def sample(self):  
-        """Draw a sample from the WMB-IS mixture proposal (assumes sum+ task)"""
+        """Draw a sample from the WMB-IS mixture proposal (assumes sum+ task)
+        Returns x,q  where x (config) is the sampled configuration and q (float) is its log-probability under the proposal.
+        """
         # TODO: add argument "x" for partial conditioning?  (return of configuration? or return tuple?)
         # TODO check for positive, unit sum weights?  (don't care?)
         x = {}
@@ -596,7 +599,7 @@ class WMB(object):
             xval = qi.sample(Z=1.0)[0]
             x[X] = xval
             logQx += np.log( qi[xval] )
-        return logQx,x
+        return x,logQx
 
 
 # functions:
@@ -633,23 +636,44 @@ class JTree(WMB):
         self.setWeights(weights)
 
     def msgForward(self):
+        """Perform a forward pass of the junction tree.
+          Returns the inference value: partition function for `sum`, optimal value for `max`.
+        """
         return_value = super(JTree,self).msgForward()
         self.forwardDone = True
         return return_value
 
     def beliefs(self, beliefs=None):
+        """Compute a set of marginals of the junction tree.  Calls msgForward if not yet done.
+          beliefs = list of variable sets, corresponding to the desired marginals.
+          Returns a corresponding length list of marginal factors.
+        """
         if beliefs is None: return {}
         if not self.forwardDone: self.msgForward()   # or raise valueerror?
         return super(JTree,self).msgBackward(beliefs=beliefs)
 
     def argmax(self):
+        """Compute a maximizing argument of the junction tree.  Calls msgForward if not yet done."""
         if not self.forwardDone: self.msgForward()   # or raise valueerror?
         return super(JTree,self).assignBackward()
 
     def sample(self):
+        """Draw a sample from the junction tree.  Calls msgForward if not yet done."""
         if not self.forwardDone: self.msgForward()   # or raise valueerror?
         return super(JTree,self).sample()
 
+    def __repr__(self):
+        """Overrides WMB __repr__ method to remove unnecessary details"""
+        to_return = ""
+        for i,b in enumerate(self.buckets):
+            to_return += "{:03d}: ".format(int(self.elimOrder[i]))
+            for j,mb in enumerate(b):
+                to_return += "{!s} => ({}); ".format(mb, self._WMB__nodeID(mb.parent)[0])
+            to_return += "\n"
+        return to_return
+
+#    def draw(self):
+#        import pygraphviz
     # Smartly accommodate changes to the model?
 
 

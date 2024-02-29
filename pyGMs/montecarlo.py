@@ -143,6 +143,24 @@ class QueryMarginals(Query):
 
 
 
+class QuerySamples(Query):
+    """Save a circular buffer of "keep" samples, inserting every "stride" MCMC steps."""
+    def __init__(self, keep=100, stride=10):
+        self.samples = [ None for i in range(keep) ]
+        self.i = 0
+        self.n = 0
+        self.stride = stride
+    def __getitem__(self,i):
+        return self.samples[(self.i+i)%len(self.samples)]
+    def __call__(self): 
+        return [self.samples[(i+self.i)%len(self.samples)] for i in range(len(self.samples)) ]
+    def update(self,x,w):
+        if (self.n % self.stride == 0):
+            self.samples[self.i] = x
+            self.i += 1; self.i = self.i % len(self.samples)
+        self.n += 1
+
+
 
 def GibbsSampling( model, query, state=None, stopSamples=1, stopTime = inf ):
     """Gibbs sampling procedure for discrete graphical model "model" with query object "query"
@@ -181,6 +199,22 @@ def GibbsSampling2( model, query, state=None, stopSamples=1, stopTime = inf ):
             state[Xi] = p.sample()[0]
             stateMap[Xi] = state[Xi]
         j += 1 
+        query.update(state, 1.0)
+    return query
+
+
+def GibbsSamplingBlock( model, query, state=None, blocks=None, stopSamples=1, stopTime = inf ):
+    """Gibbs sampling procedure for discrete graphical model "model" with query object "query"
+    """
+    if state is None: state = [ np.random.randint(v.states) for v in model.X]
+    if blocks is None: blocks = [ [x] for x in model.X ]   # basic single-var Gibbs
+    j = 0; stopTime += time()
+    while (j < stopSamples) and (time() < stopTime):
+        for b in blocks:
+            Pb = np.prod( [f.condition({v:state[v] for v in f.vars-b}) for f in model.factorsWithAny(b)] )
+            xb = Pb.sample()
+            for i,xi in zip(b,xb): state[i]=xi
+        j += 1
         query.update(state, 1.0)
     return query
 
@@ -235,7 +269,34 @@ def Metropolis( model, query, proposal, state=None, stopSamples=1, stopTime = in
 ###   
 
 
+def ImportanceSampling(model, query, proposal, stopSamples=1, stopTime = inf):
+    j = 0; stopTime += time();
+    while (j < stopSamples) and (time() < stopTime):
+        xi,qi = proposal()
+        fi = model.logValue(xi)
+        query.update(xi,np.exp(fi-qi))   # exp? do weights in log form?
+        j += 1
+    return query
 
+def AnnealedImportanceSampling(model, query, base, K=10, stopSamples=1, stopTime=inf):
+    j = 0; stopTime += time()
+    model_eps = model.copy(); model_eps.makePositive();
+    while (j < stopSamples) and (time() < stopTime):
+        xi,ln_wi = gm.bnSample(base, gm.bnOrder(base)) # TODO: how? bnSample?  wi = 1?
+        current = base
+        for t in np.linspace(1./T,1,T):
+            annealed = GraphModel( [f**(1.-t) for f in base.factors]+[f**t for f in model_eps.factors] )
+            ln_wi += (annealed.logValue(xi) - current.logValue(xi))
+            xi = GibbsSamplingBlock(annealed, QuerySamples(1,1), state=xi, stopSamples=K)[0]
+        ln_wi += (model_eps.logValue(xi) - model.logValue(xi))
+        query.update(xi,np.exp(wi))
+    return query
 
+### Annealed IS:
+###   provide base proposal p0, target f, # temp, positivity eps, Gibbs method (cliques, # steps)
+###   sample x ~ p0, define p+ = f/Zhat+eps, pt = (p0)^(1-t)*(p+)^t, t=1/#t; w = pt(x)/f 
+###   for t=2/#t...1: MCMC(pt,x); w*=pt+1/pt;
+###   w*=f/p+
+###      ** if p0 factors like p+, we can use local ops for gibbs. what if not? (enum?) (pass GModel vs pass eval f'n)
 
  

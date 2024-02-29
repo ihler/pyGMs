@@ -163,9 +163,9 @@ def WeightedDD( factors, weights, elimOrder, direction=1.0, maxIter=100, verbose
       for j,wt,dw in zip(idx,weights,dW): wt[j] /= wtot;
 
     def armijo(thetas,weights,pri,Xi,steps,threshold=1e-4,direction=+1, optTol=1e-8,progTol=1e-8):
-      import copy
+      import copy, functools
       f0,f1 = None, calc_bound(thetas,weights,pri)                       # init prev, current objective values
-      match = reduce(lambda a,b: a&b, [th.vars for th in thetas], thetas[0].vars)
+      match = functools.reduce(lambda a,b: a&b, [th.vars for th in thetas], thetas[0].vars)
       idx = [th.v.index(Xi) for th in thetas] if Xi is not None else []  # find location of Xi in var/weight vectors
       newweights = copy.deepcopy(weights) if Xi is not None else weights # copy weights if updated
       for s in range(steps):

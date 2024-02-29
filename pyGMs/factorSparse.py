@@ -489,7 +489,8 @@ class FactorSparse(object):
 
     >>> F.condition({0:a,2:b})   # returns  f(X_1,X_3) = F(X_0=a, X_1, X_2=b, X_3)
     """
-    ax = tuple(evidence[v] if  v in evidence else None for x in self.v)
+    ax = tuple(evidence[vi] if  vi in evidence else None for vi in self.v)
+    cvars = VarSet([vi for vi in self.v if vi in evidence])
     out = FactorSparse(self.v - cvars, {})
     for l,x in self.t.items():
       if (cvars is None) or all(ax[i]==None or ax[i]==l[i] for i in range(len(l))):

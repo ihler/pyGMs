@@ -60,6 +60,20 @@ class testGraphModel(unittest.TestCase):
     self.assertTrue( eq_tol( gmo.joint(), jt, tol ) )
 
 
+  def testHash(self):
+    x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
+    flist = []
+    flist.append( Factor( [x[0],x[2]] , [ [0.1,0.9],[0.33,0.67] ] ) )
+    flist.append( Factor( [x[0],x[4]] , [0.450,0.620,0.80,0.930,0.740,0.180,0.410,0.940,0.920,0.420] ) )
+    gmo = GraphModel(flist)
+    hash1 = gmo.sig
+    gmo.makeMinimal()
+    self.assertEqual(hash1, gmo.sig)
+    gmo.addFactors( [Factor([x[1],x[3]], [2,1,2,3,2,3] )] )
+    self.assertTrue( hash1 != gmo.sig )
+    gmo.removeFactors( gmo.factorsWith(x[1]) )
+    self.assertEqual(hash1, gmo.sig)
+
 
 
 

@@ -19,28 +19,34 @@ from builtins import range
 
 
 
-def readFileByTokens(path, specials=[]):
-  """Helper function for parsing pyGMs file formats"""
+def readFileByTokens(path, specials=[], escape=True):
+  """Helper function for parsing pyGMs file formats
+    specials : list of tokens to split on (in addition to whitespace, '\s')
+    escape   : escape any specials; if False, interpret specials directly as regular expressions
+  """
   import re
-  spliton = '([\s'+''.join(specials)+'])'
+  if escape: specials = [re.escape(s) for s in specials]
+  spliton = '([\s])'
+  if len(specials): spliton += '|'+'|'.join(['('+s+')' for s in specials])
   with open(path, 'r') as fp:
     for line in fp:
-      #if line[-1]=='\n': line = line[:-1]
       tok = [t.strip() for t in re.split(spliton,line) if t and not t.isspace()]
       for t in tok: yield t
-        #t = t.strip()
-        #if t != '':
-        #  yield t
 
 
 def stripComments(gen, start=['/*'],end=['*/']):
+  """Helper function for removing comment sub-sequences from a stream
+    start/end : list of tokens marking start and end of subsequences to remove 
+  """
   while True:
-    t = next(gen)
+    try: t = next(gen)
+    except StopIteration: return
     if t not in start: 
       yield t
     else:
       while t not in end: 
-        t = next(gen) 
+        try: t = next(gen) 
+        except StopIteration: return
 
 
 ################################################################################################
@@ -391,7 +397,7 @@ def writeWCSP(filename, factors, upper_bound=None, use_float=False):
           else:         fp.write(" {:d}\n".format(int(f[tup])))
 
 
-def readDSL(filename):
+def readDSL(filename, verbose=False):
   """Read GeNIe XML DSL format Bayesian network"""
   # TODO: check table entry order
   import xml.etree.ElementTree as ET
@@ -404,7 +410,7 @@ def readDSL(filename):
     if node.tag == 'cpt' or node.tag == 'decision':  # cpts & decisions define a variable:
       name = node.attrib['id']
       states = node.findall('state')
-      print("{} ({}): {} states".format(name,len(X),len(states)))
+      if verbose: print("{} ({}): {} states".format(name,len(X),len(states)))
       X[name] = Var(len(X), len(states)) 
       names.append(name)
       labels.append([s.attrib['id'] for s in states])
@@ -645,18 +651,22 @@ def LimidCRA2MMAP(C,D,U):
 
 
 
-def readOrder(filename):
+def readOrder(filename, *args,**kwargs):
     """Read an elimination order from a file
 
     Elimination orders are stored as unknown length vectors, format "[nvar] [v0] [v1] ... [vn]"
 
     Note: the same file format may also be useful for MPE configurations, etc.
+    Additional arguments passed to numpy.loadtxt (used for file read)
     """
-    with open(filename,'r') as fp:
-        lines = fp.readlines();
-    text = lines[-1].strip('\n').split(' ');
-    nvar = int(text[0]);
-    vals = [int(text[i]) for i in range(1,nvar+1)];
+    tmp = np.loadtxt(filename, dtype=int, *args, **kwargs)
+    nvar = tmp[0]
+    vals = list(tmp.squeeze()[1:nvar+1])
+    #with open(filename,'r') as fp:
+    #    lines = fp.readlines();
+    #text = lines[-1].strip('\n').split(' ');
+    #nvar = int(text[0]);
+    #vals = [int(text[i]) for i in range(1,nvar+1)];
     if len(vals) != nvar: raise ValueError("Problem with file?");
     return vals
 

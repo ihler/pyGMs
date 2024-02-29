@@ -184,7 +184,7 @@ def drawBayesNet(model,**kwargs):
     kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
     topo_order = bnOrder(model)                              # TODO: allow user-provided order?
     if topo_order is None: raise ValueError('Topo order not found; model is not a Bayes Net?')
-    pri = np.zeros((len(topo_order),))-1
+    pri = np.zeros((max(topo_order)+1,))-1
     pri[topo_order] = np.arange(len(topo_order))
     G = nx.DiGraph()
     G.add_nodes_from( [v.label for v in model.X if v.states > 1] )  # only non-trivial vars
@@ -193,7 +193,7 @@ def drawBayesNet(model,**kwargs):
       for v1 in f.vars:
         if (v1.label != v2label): G.add_edge(v1.label,v2label)
 
-    kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in [v.label for v in model.X]})
+    kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in [v.label for v in model.X if v.states>1]})
     kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
     kwargs.pop('var_labels',None)   # remove artificial "var_labels" entry)
     kwargs['arrowstyle'] = kwargs.get('arrowstyle','->')
@@ -223,7 +223,7 @@ def drawLimid(model, C,D,U, **kwargs):
     cpd_edges, util_edges, info_edges = [],[],[]
     topo_order = bnOrder(model)
     if topo_order is None: raise ValueError('Topo order not found; graph is not a Bayes Net?')
-    pri = np.zeros((len(topo_order),))-1
+    pri = np.zeros((max(topo_order)+1,))-1
     pri[topo_order] = np.arange(len(topo_order))
     G = nx.DiGraph()
     G.add_nodes_from( [v.label for v in model.X if v.states > 1] )  # only non-trivial vars
@@ -256,4 +256,70 @@ def drawLimid(model, C,D,U, **kwargs):
 #def drawJGraph(
 
 
+
+#### TODO: fix & test
+#def drawSearchTree(root):
+#    """G, pos = drawSearchTree(root) :  return nxGraph of a current search tree, and position information."""
+#    nodes = [[(-root.value,root)],[]]
+#    while True:
+#        for n in nodes[-2]:
+#            nodes[-1] += n[1].children
+#        if len(nodes[-1])==0: break
+#        nodes.append([])
+#    pos = {}
+#    for d in range(len(nodes)-1,-1,-1):
+#        p = 0.
+#        for vn,n in nodes[d]:
+#            if len(n.children)>0:
+#                p = np.mean([pos[c][0] for vc,c in n.children])
+#                pos[n] = (p, -d*1.)
+#                p = np.max([pos[c] for vc,c in n.children]) + 1.
+#            else:
+#                pos[n] = (p,-d*1.)
+#                p += 1
+#    G = nx.Graph(); G.add_nodes_from([n for ns in nodes for n in ns]);
+#    G.add_edges_from([(p,n) for ns in nodes[:-1] for p in ns for n in p.children])
+#    return G,pos
+
+def nxTreeLayout(G):
+    """pos = nxTreeLayout(G) :  return positions for root-down layout of a tree."""
+    depth = {}; by_depth = {}
+    for n in G.nodes: 
+        dn = n.count(',')+n.count('.')  # number of variables & number of values    
+        depth[n] = dn
+        by_depth[dn] = [n] if dn not in by_depth else by_depth[dn]+[n]
+
+    pos = {}
+    leaves = sorted([n for n in G.nodes if len(G.out_edges(n))==0])
+    max_depth = max(by_depth.keys());
+    x = -1.
+    for i,l in enumerate(leaves): 
+        if i>0:
+            x += 1. + np.log2(depth[l] - depth[nx.lowest_common_ancestor(G,l,leaves[i-1])])
+        else: x += 1. + 0*np.log2(max_depth - depth[l]+1)
+        pos[l] = (x,-depth[l]);
+        
+    for d in range(max_depth,-1,-1):
+        if d not in by_depth: continue
+        for n in by_depth[d]: 
+            if n not in pos: pos[n] = (np.mean([pos[c[1]][0] for c in G.out_edges(n)]), -depth[n])
+    return pos
+
+## TODO: nxTuneTreeLayout? Make tree layout look nicer?
+
+
+
+def nx2tikz(G,pos, precision=1, use_names=True):
+    latex = "\\begin{tikzpicture} \n"
+    latex+= "  \\tikzset{var/.style = {shape=circle,draw,minimum size=1.2em}} \n"
+    latex+= "  \\tikzset{edge/.style = {->,> = latex,line width=0.5mm}} \n"
+    nodes = list(G.nodes)
+    id = lambda n: n if use_names else nodes.index(n)
+    locat = np.array([pos[key] for key in nodes]).reshape(-1,2).round(precision)
+    latex += "  \\foreach \\name/\\pos in {"+",".join(["{"+"{}/({},{})".format(id(nodes[i]),locat[i,0],locat[i,1])+"}" for i in range(len(locat))])+"}\n"
+    latex += "    \\node[var] (\\name) at \\pos {$\\name$}; \n"
+    latex += "  \\foreach \\pa/\\ch in {"+",".join(["{"+"{}/{}".format(id(e[0]),id(e[1]))+"}" for e in G.edges])+"}\n"
+    latex += "    \\draw[edge] (\\pa) to (\\ch); \n"
+    latex += "\\end{tikzpicture} \n"
+    return latex
 

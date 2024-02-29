@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<smile version="1.0" id="CarProblem" numsamples="1000" discsamples="10000">
+	<nodes>
+		<!-- create node "Fu" -->
+		<cpt id="Fu" >
+			<!-- setting names of outcomes -->
+			<state id="yes" />
+			<state id="no" />
+			<!-- setting probabilities -->
+			<probabilities>0.98 0.02 </probabilities>
+		</cpt>
+		<!-- create node "SP" -->
+		<cpt id="SP" >
+			<!-- setting names of outcomes -->
+			<state id="yes" />
+			<state id="no" />
+			<!-- setting probabilities -->
+			<probabilities>0.96 0.04 </probabilities>
+		</cpt>
+		<!-- create node "FM" -->
+		<cpt id="FM" >
+			<!-- setting names of outcomes -->
+			<state id="full" />
+			<state id="half" />
+			<state id="empty" />
+			<!-- add arcs -->
+			<parents>Fu </parents>
+			<!-- setting probabilities -->
+			<probabilities>0.39 0.6 0.01 0.001 0.001 0.998 </probabilities>
+		</cpt>
+		<!-- create node "St" -->
+		<cpt id="St" >
+			<!-- setting names of outcomes -->
+			<state id="yes" />
+			<state id="no" />
+			<!-- add arcs -->
+			<parents>Fu SP </parents>
+			<!-- setting probabilities -->
+			<probabilities>0.99 0.01 0.01 0.99 0.0 1.0 0.0 1.0 </probabilities>
+		</cpt>
+	</nodes>
+	<extensions>
+		<genie version="1.0" app="py2GeNIe 2013" name="CarProblem" faultnameformat="nodestate">
+			<node id="Fu">
+				<name>Fu</name>
+				<interior color="e5f6f7" />
+				<outline color="0000bb" />
+				<font color="000000" name="Arial" size="8" />
+				<position>100 10 225 75</position>
+				<barchart active="true" width="125" height="65" />
+			</node>
+			<node id="SP">
+				<name>SP</name>
+				<interior color="e5f6f7" />
+				<outline color="0000bb" />
+				<font color="000000" name="Arial" size="8" />
+				<position>300 10 425 75</position>
+				<barchart active="true" width="125" height="65" />
+			</node>
+			<node id="FM">
+				<name>FM</name>
+				<interior color="cc99ff" />
+				<outline color="0000bb" />
+				<font color="000000" name="Arial" size="8" />
+				<position>0 150 125 215</position>
+				<barchart active="true" width="125" height="65" />
+			</node>
+			<node id="St">
+				<name>St</name>
+				<interior color="ff0000" />
+				<outline color="0000bb" />
+				<font color="000000" name="Arial" size="8" />
+				<position>200 150 325 215</position>
+				<barchart active="true" width="125" height="65" />
+			</node>
+		</genie>
+	</extensions>
+</smile>

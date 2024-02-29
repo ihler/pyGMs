@@ -50,6 +50,7 @@ class GraphModel(object):
  
   #TODO: useful stuff for algorithm objects interacting with the graph
   lock         = False         # are factors "locked", or are reparameterization changes OK?
+  ## TODO: change to structure lock & parameter lock, separate?
   sig          = 0;            # "signature" of factor cliques; changes if model structure (cliques) changes
  
   isLog = False                # flag: additive (log probability) model vs multiplicative (probability) model 
@@ -75,6 +76,36 @@ class GraphModel(object):
     self.isLog = isLog
     if not (factorList is None): self.addFactors(factorList, copy=copy)
   
+  ###################################################
+  ## Basic accessors: what variables are in the model?
+
+  @property
+  def vars(self):
+    """List of variables in the graphical model; equals model.X"""
+    return self.X
+
+  @property
+  def vars_nontrivial(self):
+    """List of "nontrivial" variables (more than one state) in the graphical model"""
+    return [x for x in self.X if x.states>1]
+
+  def var(self,i):   # TODO: change to property to access (read only?) X?
+    """Return a variable object (with # states) for id 'i'; equals model.X[i]"""
+    return self.X[i]
+
+  @property
+  def nvar(self):
+    """The number of variables ( = largest variable id) in the model"""
+    return len(self.X)
+
+  @property
+  def nfactors(self): 
+    """The number of factors in the model"""
+    return len(self.factors)
+
+  ###################################################
+  ## Basic transforms. "Log" model => additive cliques, "Exp" model => multiplicative cliques
+
   def toLog(self):
     """Convert internal factors to log form (if not already).  May use 'isLog' to check."""
     if not self.isLog:
@@ -94,6 +125,33 @@ class GraphModel(object):
     import copy as pcopy
     return pcopy.deepcopy(self)
 
+  def makePositive(self,eps=1e-8):
+    """Force factors / model to be positive (non-zero)"""
+    if self.isLog(): eps = np.log(eps)
+    for f in self.factors:
+      f.table = np.maximum( f.table, eps )
+
+  def value(self,x,subset=None):
+    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x.
+         If optional subset != None, uses *only* the factors in the Markov blanket of subset.
+    """
+    if not _is2D(x): x=[x]
+    factors = self.factors if subset==None else self.factorsWithAny(subset)
+    if self.isLog: return np.exp( np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1) )
+    else:          return np.product( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
+
+  def logValue(self,x,subset=None): 
+    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x.
+         If optional subset != None, uses *only* the factors in the Markov blanket of subset.
+    """
+    if not _is2D(x): x=[x]
+    factors = self.factors if subset==None else self.factorsWithAny(subset)
+    if self.isLog: return np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
+    else:          return np.sum( [[ np.log(f.valueMap(xx)) for f in factors] for xx in x] ,1)
+
+  ###################################################
+  ## Modifying graph structure & cliques
+
   def addFactors(self,flist,copy=True):
     """Add a list of factors to the model; factors are copied locally unless copy = False"""
     import copy as pcopy
@@ -108,7 +166,7 @@ class GraphModel(object):
         if self.X[v].states <= 1: self.X[v] = v   # copy variable info if undefined, then check:
         if self.X[v].states != v.states: raise ValueError('Incorrect # of states',v,self.X[v])
         self.factorsByVar[v].add(f)
-    self.sig = np.random.rand()     # TODO: check if structure is / can be preserved?
+    self.sig = self.__clique_signature()  # track graph clique signature
 
   def removeFactors(self,flist):
     """Remove a list of factors from the model
@@ -119,7 +177,7 @@ class GraphModel(object):
     for f in flist:
       for v in f.vars:
         self.factorsByVar[v].discard(f)
-    self.sig = np.random.rand()     # TODO: check if structure is / can be preserved?
+    self.sig = self.__clique_signature()  # track graph clique signature
 
   def makeCanonical(self):
     """Add/merge factors to make a canonical factor graph: singleton factors plus maximal cliques"""
@@ -129,6 +187,7 @@ class GraphModel(object):
         if self.isLog: fs[-1] += f
         else:          fs[-1] *= f
         self.removeFactors([f])
+    self.sig = self.__clique_signature()  # track graph clique signature
         
   def makeMinimal(self):
     """Merge factors to make a minimal factor graph: retain only factors over maximal cliques"""
@@ -141,7 +200,15 @@ class GraphModel(object):
         else:          largest *= f
         to_remove.append(f)
     self.removeFactors(to_remove)
+    self.sig = self.__clique_signature()  # track graph clique signature
 
+  def __clique_signature(self):
+      """Generate hash value based on the graph cliques. Used to track changes in graph structure."""
+      cliquestr = ",".join( (str(f.vars) for f in self.factors) )
+      return hash(cliquestr)
+
+  ###################################################
+  ## Querying graph structure & cliques; special classes of models
 
   def factorsWith(self,v,copy=True):
     """Get the list of all factors that include variable v"""
@@ -167,29 +234,11 @@ class GraphModel(object):
     vs -= [v]
     return vs
  
-  def value(self,x,subset=None):
-    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x.
-         If optional subset != None, uses *only* the factors in the Markov blanket of subset.
-    """
-    if not _is2D(x): x=[x]
-    factors = self.factors if subset==None else self.factorsWithAny(subset)
-    if self.isLog: return np.exp( np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1) )
-    else:          return np.product( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
-
-  def logValue(self,x,subset=None): 
-    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x.
-         If optional subset != None, uses *only* the factors in the Markov blanket of subset.
-    """
-    if not _is2D(x): x=[x]
-    factors = self.factors if subset==None else self.factorsWithAny(subset)
-    if self.isLog: return np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
-    else:          return np.sum( [[ np.log(f.valueMap(xx)) for f in factors] for xx in x] ,1)
-
-  def isBinary(self):   # Check whether the model is binary (all variables binary)
+  def isBinary(self):   
     """Check whether the graphical model is binary (all variables <= 2 states)"""
     return all( [x.states <= 2 for x in self.X] )
 
-  def isPairwise(self): # Check whether the model is pairwise (all factors pairwise)
+  def isPairwise(self): 
     """Check whether the graphical model is pairwise (has maximum scope size 2)"""
     return all( [len(f.vars)<= 2 for f in self.factors] )
 
@@ -218,28 +267,10 @@ class GraphModel(object):
       if tmp > tol: return False                     # fail if not a CPT for X
     if np.prod(found)==0: return False               # fail if missing some variable's CPT
     return True
-    
+  
 
-  @property
-  def vars(self):
-    """List of variables in the graphical model; equals model.X"""
-    return self.X
-
-  def var(self,i):   # TODO: change to property to access (read only?) X?
-    """Return a variable object (with # states) for id 'i'; equals model.X[i]"""
-    return self.X[i]
-
-  @property
-  def nvar(self):
-    """The number of variables ( = largest variable id) in the model"""
-    return len(self.X)
-
-  @property
-  def nfactors(self): 
-    """The number of factors in the model"""
-    return len(self.factors)
-
-
+  ###################################################
+  ## Graph transformations: conditioning on evidence, marginalizing variables
 
   def condition(self, evidence):
     """Condition (clamp) the graphical model on a partial configuration (dict) {Xi:xi, Xj:xj, ...}"""
@@ -336,180 +367,6 @@ class GraphModel(object):
     
 
 
-# def nxMarkovGraph(self, all_vars=False):
-#   """Get networkx Graph object of the Markov graph of the model
-#
-#   Example:
-#   >>> G = nxMarkovGraph(model)
-#   >>> nx.draw(G)
-#   """
-#   import networkx as nx
-#    G = nx.Graph()
-#    G.add_nodes_from( [v.label for v in self.X if (all_vars or v.states > 1)] ) 
-#    for f in self.factors:
-#      for v1 in f.vars:
-#        for v2 in f.vars:
-#          if (v1 != v2) and (all_vars or (v1.states > 1 and v2.states > 1)): 
-#            G.add_edge(v1.label,v2.label)
-#    return G 
-#    """ Plotting examples:
-#    fig,ax=plt.subplots(1,2)
-#    pos = nx.spring_layout(G) # so we can use same positions multiple times...
-#    # use nodelist=[nodes-to-draw] to only show nodes in model
-#    nx.draw(G,with_labels=True,labels={0:'0',1:'1',2:'2',3:'3',4:'4',5:'5',6:'6'},
-#              node_color=[.3,.3,.3,.7,.7,.7,.7],vmin=0.0,vmax=1.0,pos=pos,ax=ax[0])
-#    nx.draw(G,with_labels=True,labels={0:'0',1:'1',2:'2',3:'3',4:'4',5:'5',6:'6'},
-#              node_color=[.3,.3,.3,.7,.7,.7,.7],vmin=0.0,vmax=1.0,pos=pos,ax=ax[1])
-#    """
-#
-#  def drawMarkovGraph(self,**kwargs):
-#    """Draw a Markov random field using networkx function calls
-#
-#    Args:
-#      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
-#
-#    Example:
-#    >>> model.drawMarkovGraph( labels={0:'0', ... } )    # keyword args passed to networkx.draw()
-#    """
-#    # TODO: fix defaults; specify shape, size etc. consistent with FG version
-#    import networkx as nx
-#    G = self.nxMarkovGraph()
-#    kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in G.nodes()})
-#    kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
-#    nx.draw(G,**kwargs)
-#    return G
-#
-#
-#
-#  def drawFactorGraph(self,var_color='w',factor_color=[(.2,.2,.8)],**kwargs):
-#    """Draw a factorgraph using networkx function calls
-#
-#    Args:
-#      var_color (str, tuple): networkx color descriptor for drawing variable nodes
-#      factor_color (str, tuple list): networkx color for drawing factor nodes
-#      var_labels (dict): variable id to label string for variable nodes
-#      factor_labels (dict): factor id to label string for factor nodes
-#      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
-#
-#    Example:
-#    >>> model.drawFactorGraph( var_labels={0:'0', ... } )    # keyword args passed to networkx.draw()
-#    """
-#    # TODO: specify var/factor shape,size, position, etc.; return G? silent mode?
-#    import networkx as nx
-#    G = nx.Graph()
-#    vNodes = [v.label for v in self.X if v.states > 1]   # list only non-trivial variables
-#    fNodes = [-i-1 for i in range(len(self.factors))]    # use negative IDs for factors
-#    G.add_nodes_from( vNodes )
-#    G.add_nodes_from( fNodes )
-#    for i,f in enumerate(self.factors):
-#      for v1 in f.vars:
-#        G.add_edge(v1.label,-i-1)
-#
-#    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
-#    kwargs['var_labels']  = kwargs.get('var_labels',{n:n for n in vNodes})
-#    kwargs['labels'] = kwargs.get('var_labels',{})
-#    nx.draw_networkx(G, nodelist=vNodes,node_color=var_color,**kwargs)
-#    kwargs['labels'] = kwargs.get('factor_labels',{})    # TODO: need to transform?
-#    nx.draw_networkx_nodes(G, nodelist=fNodes,node_color=factor_color,node_shape='s',**kwargs)
-#    nx.draw_networkx_edges(G,**kwargs)
-#    return G
-#
-#
-#
-#  def drawBayesNet(self,**kwargs):
-#    """Draw a Bayesian Network (directed acyclic graph) using networkx function calls
-#
-#    Args:
-#      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
-#
-#    Example:
-#    >>> model.drawBayesNet( labels={0:'0', ... } )    # keyword args passed to networkx.draw()
-#    """
-#    import networkx as nx
-#    topo_order = bnOrder(self)                              # TODO: allow user-provided order?
-#    if topo_order is None: raise ValueError('Topo order not found; graph is not a Bayes Net?')
-#    pri = np.zeros((len(topo_order),))-1
-#    pri[topo_order] = np.arange(len(topo_order))
-#    G = nx.DiGraph()
-#    G.add_nodes_from( [v.label for v in self.X if v.states > 1] )  # only non-trivial vars
-#    for f in self.factors:
-#      v2label = topo_order[ int(max(pri[v.label] for v in f.vars)) ]
-#      for v1 in f.vars:
-#        if (v1.label != v2label): G.add_edge(v1.label,v2label)
-#
-#    kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in [v.label for v in self.X]})
-#    kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
-#    kwargs['arrowstyle'] = kwargs.get('arrowstyle','->')
-#    kwargs['arrowsize'] = kwargs.get('arrowsize',10)
-#    nx.draw(G,**kwargs)
-#    return G
-#
-#
-#  def drawLimid(self, C,D,U, **kwargs):
-#    """Draw a limited-memory influence diagram (limid) using networkx 
-#
-#    Args:
-#      ``**kwargs``: remaining keyword arguments passed to networkx.draw()
-#
-#    Example:
-#    >>> model.drawLimid(C,D,U, var_labels={0:'0', ... } )    # keyword args passed to networkx.draw()
-#    """
-#    import networkx as nx
-#    decisions = [d[-1] for d in D]                       # list the decision variables
-#    model = GraphModel( C + [Factor(d,1.) for d in D] )  # get all chance & decision vars, arcs
-#    chance = [c for c in model.X if c not in decisions]
-#    util = [-i-1 for i,u in enumerate(U)]
-#    cpd_edges, util_edges, info_edges = [],[],[]
-#    topo_order = bnOrder(model)                          
-#    if topo_order is None: raise ValueError('Topo order not found; graph is not a Bayes Net?')
-#    pri = np.zeros((len(topo_order),))-1
-#    pri[topo_order] = np.arange(len(topo_order))
-#    G = nx.DiGraph()
-#    G.add_nodes_from( [v.label for v in self.X if v.states > 1] )  # only non-trivial vars
-#    G.add_nodes_from( util )                                       # add utility nodes
-#    for f in model.factors:
-#      v2label = topo_order[ int(max(pri[v.label] for v in f.vars)) ]
-#      for v1 in f.vars:
-#        if (v1.label != v2label): 
-#          G.add_edge(v1.label,v2label)
-#          if v2label in decisions: info_edges.append((v1.label,v2label))
-#          else: cpd_edges.append((v1.label,v2label))
-#    for i,u in enumerate(U):
-#      for v1 in u.vars:
-#        G.add_edge(v1.label,-i-1)
-#        util_edges.append( (v1.label,-i-1) )
-#    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
-#    nx.draw_networkx_nodes(G, nodelist=decisions, node_color=[(.7,.7,.9)], node_shape='s', **kwargs)
-#    nx.draw_networkx_nodes(G, nodelist=chance, node_color=[(1.,1.,1.)], node_shape='o', **kwargs)
-#    nx.draw_networkx_nodes(G, nodelist=util, node_color=[(.7,.9,.7)], node_shape='d', **kwargs)
-#    nx.draw_networkx_edges(G, edgelist=cpd_edges+util_edges, **kwargs)
-#    tmp = nx.draw_networkx_edges(G, edgelist=info_edges, **kwargs)
-#    for line in tmp: line.set_linestyle('dashed')
-#    nx.draw_networkx_labels(G, **kwargs)
-
-
-
-#  def nxFactorGraph(self):
-#    """Get networkx Graph object of the factor graph of the model"""
-#    import networkx as nx
-#    G = nx.Graph()
-#    vNodes = [v.label for v in self.X]
-#    fNodes = [-i-1 for i in range(len(self.factors))]
-#    G.add_nodes_from( vNodes )
-#    G.add_nodes_from( fNodes )
-#    for f in self.factors:
-#      for v1 in f.vars:
-#        G.add_edge(v1.label,-self.factors.index(f)-1)
-#    return G 
-#    """ Plotting examples:
-#    pos = nx.spring_layout(G) # so we can use same positions multiple times...
-#    nx.draw_networkx(G,pos=pos, nodelist=[n for n in G.nodes() if n >= 0],node_color='w')
-#    nx.draw_networkx_nodes(G,pos=pos, nodelist=[n for n in G.nodes() if n < 0],node_color='g',node_shape='s')
-#    nx.draw_networkx_edges(G,pos=pos)
-#    nx.draw_networkx_labels(G,pos=pos,labels={n:n for n in G.nodes() if n>=0})
-#    """
-
-
 
   ############# FUNCTIONS TODO ######################
   
@@ -545,16 +402,20 @@ def bnOrder(bn):
         list: variable IDs in a topological order from roots to leaves
     """
     temp = GraphModel(bn.factors, copy=False)  # slow? unnecessary?
-    topo_order = [-1]*bn.nvar
-    pri = [-1]*bn.nvar
-    for i in range(bn.nvar):
+    nvar = len(bn.vars_nontrivial)
+    topo_order = [-1]*nvar
+    for i in range(nvar):
+        #print(f"Have: {[f.vars for f in temp.factors]}")
+        # check if all remaining vars have only one state?
         if temp.factors[0].nvar != 1: return None    # if there are no root variables, not a BN
         X = temp.factors[0].vars[0]                  # otherwise, add root to the topological order
+        if X.states < 2: raise ValueError('Factor with trivial variable argument?')
         topo_order[i] = X.label
-        pri[X] = i
+        #print(f"  Root {X.label}")
         withX = temp.factorsWith(topo_order[i])      # remove it from its childrens' CPTs
         temp.removeFactors(withX)                    #  to look for the next variable in the order
         temp.addFactors( [f.condition2([X],[0]) for f in withX if f.nvar > 1] )
+        #print(f"  Now {[f.vars for f in temp.factors]}")
     return topo_order
 
 
@@ -566,21 +427,22 @@ def bnPrune(bn, query):
 
 
 def bnSample(model, order, evidence={}):
-  """Draw a sample from a Bayes net with given topological order and evidence E={ Xi: k ... }
+  """xs, lnP = bnSample(model, order, evidence)
+  Draw a sample from a Bayes net with given topological order and evidence E={ Xi: k ... }
 
   Args:
     model (GraphModel): A Bayesian network or other graphical model
     order (list): A topological ordering of the variables, e.g., from ``bnOrder(model)``
 
   Returns:
-     float : lnP, the log-probability of the sampled configuration xs 
      tuple : xs, the sampled configuration (including evidence)
+     float : lnP, the log-probability of the sampled configuration xs 
 
   Notes: lnP, the log-probability, does not include any evidence probabilities.  If `model` is not a
      Bayes net, the process and lnP will still correspond to some valid distribution over X given E.
   """
   lnP, cfg = 0.0, evidence.copy()
-  pri = np.zeros((len(order),))-1
+  pri = np.zeros((max(order)+1,))-1
   pri[order] = np.arange(len(order))
   for i in order:
     if i in evidence: continue
@@ -592,82 +454,83 @@ def bnSample(model, order, evidence={}):
     Pi = Pi.marginal([i])     # likely not necessary, but to be safe for non BNs
     cfg[i] = Pi.sample()[0]
     lnP += np.log( Pi[cfg[i]] )
-  return lnP, tuple(cfg.get(i,0) for i in model.X) 
+  return tuple(cfg.get(i,0) for i in model.X), lnP
+  # TODO: if model.X is not 0...n-1, this does not include missing variables (?)
 
 # One-line likelihood weighting estimator:
-# np.mean( [ np.exp(model.logValue(xs)-lnP) for s in range(1000) for lnP,xs in [gm.bnSample(model,order,evid)] ] )
+# np.mean( [ np.exp(model.logValue(xs)-lnP) for s in range(1000) for xs,lnP in [gm.bnSample(model,order,evid)] ] )
 #
 #
 
 
 
-def _eliminationOrder_OLD(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
-  """Find an elimination order for a graphical model
-  Args:
-    gm (GraphModel): A graphical model object
-    method (str): Heuristic method; one of {'minfill','wtminfill','minwidth','wtminwidth','random'}
-    nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds
-        randomness to the order selection process.  0 => randomly from best; -1 => no randomness (default)
-    cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)
-    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
-    priority (list, optional): Optional list of variable priorities; lowest priority variables are 
-        eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.
-  Returns:
-    list: The identified elimination order
-    float: The "score" of this ordering
-  Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:
-  >>> ord, score = eliminationOrder(model, 'minfill', nExtra=2, cutoff=score, target=ord) 
-  """
-  import bisect
-  orderMethod = 'minfill' if orderMethod is None else orderMethod.lower()
-  priority = [1 for x in gm.X] if priority is None else priority
-
-  if   orderMethod == 'minfill':    score = lambda adj,Xj: sum([0.5*len(adj[Xj]-adj[Xk]) for Xk in adj[Xj]])
-  elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStatesDouble() for Xk in adj[Xj]])
-  elif orderMethod == 'minwidth':   score = lambda adj,Xj: len(adj[Xj])
-  elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStatesDouble()
-  elif orderMethod == 'random':     score = lambda adj,Xj: np.random.rand()
-  else: raise ValueError('Unknown ordering method: {}'.format(orderMethod))
-
-  adj = [ VarSet([Xi]) for Xi in gm.X ]
-  for Xi in gm.X: 
-    for f in gm.factorsWith(Xi, copy=False):
-      adj[Xi] |= f.vars
-
-  # initialize priority queue of scores using e.g. heapq or sort
-  scores  = [ (priority[Xi],score(adj,Xi),Xi) for Xi in gm.X ]
-  reverse = scores[:]
-  scores.sort()
-  totalSize = 0.0
-  _order = [0 for Xi in gm.X]
-
-  for idx in range(gm.nvar):
-    pick = 0
-    Pi,Si,Xi = scores[pick]
-    if nExtra >= 0:
-      mx = bisect.bisect_right(scores, (Pi,Si,gm.X[-1]))  # get one past last equal-priority & score vars
-      pick = min(mx+nExtra, len(scores))                  # then pick a random "near-best" variable
-      pick = np.random.randint(pick)
-      Pi,Si,Xi = scores[pick]
-    del scores[pick]
-    _order[idx] = Xi.label        # write into order[idx] = Xi
-    totalSize += adj[Xi].nrStatesDouble()
-    if totalSize > cutoff: return target,cutoff  # if worse than cutoff, quit with no changes to "target"
-    fix = VarSet()
-    for Xj in adj[Xi]:
-      adj[Xj] |= adj[Xi]
-      adj[Xj] -= [Xi]
-      fix |= adj[Xj]   # shouldn't need to fix as much for min-width?
-    for Xj in fix:
-      Pj,Sj,Xj = reverse[Xj]
-      jPos = bisect.bisect_left(scores, (Pj,Sj,Xj))
-      del scores[jPos]                        # erase (Pj,Sj,Xj) from heap 
-      reverse[Xj] = (Pj,score(adj,Xj),Xj)     
-      bisect.insort_left(scores, reverse[Xj]) # add (Pj,score(adj,Xj),Xj) to heap & update reverse lookup
-  if not (target is None): 
-    target.extend([None for i in range(len(target),len(_order))])  # make sure order is the right size
-    for idx in range(gm.nvar): target[idx]=_order[idx]   # copy result if completed without quitting
-  return _order,totalSize
+#def _eliminationOrder_OLD(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
+#  """Find an elimination order for a graphical model
+#  Args:
+#    gm (GraphModel): A graphical model object
+#    method (str): Heuristic method; one of {'minfill','wtminfill','minwidth','wtminwidth','random'}
+#    nExtra (int): Randomly select eliminated variable from among the best plus nExtra; this adds
+#        randomness to the order selection process.  0 => randomly from best; -1 => no randomness (default)
+#    cutoff (float): Quit early if ``score`` exceeds a user-supplied cutoff value (returning ``target, cutoff``)
+#    target (list): If the identified order is better than cutoff, write it directly into passed ``target`` list
+#    priority (list, optional): Optional list of variable priorities; lowest priority variables are 
+#        eliminated first.  Useful for mixed elimination models, such as marginal MAP inference tasks.
+#  Returns:
+#    list: The identified elimination order
+#    float: The "score" of this ordering
+#  Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:
+#  >>> ord, score = eliminationOrder(model, 'minfill', nExtra=2, cutoff=score, target=ord) 
+#  """
+#  import bisect
+#  orderMethod = 'minfill' if orderMethod is None else orderMethod.lower()
+#  priority = [1 for x in gm.X] if priority is None else priority
+#
+#  if   orderMethod == 'minfill':    score = lambda adj,Xj: sum([0.5*len(adj[Xj]-adj[Xk]) for Xk in adj[Xj]])
+#  elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStatesDouble() for Xk in adj[Xj]])
+#  elif orderMethod == 'minwidth':   score = lambda adj,Xj: len(adj[Xj])
+#  elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStatesDouble()
+#  elif orderMethod == 'random':     score = lambda adj,Xj: np.random.rand()
+#  else: raise ValueError('Unknown ordering method: {}'.format(orderMethod))
+#
+#  adj = [ VarSet([Xi]) for Xi in gm.X ]
+#  for Xi in gm.X: 
+#    for f in gm.factorsWith(Xi, copy=False):
+#      adj[Xi] |= f.vars
+#
+#  # initialize priority queue of scores using e.g. heapq or sort
+#  scores  = [ (priority[Xi],score(adj,Xi),Xi) for Xi in gm.X ]
+#  reverse = scores[:]
+#  scores.sort()
+#  totalSize = 0.0
+#  _order = [0 for Xi in gm.X]
+#
+#  for idx in range(gm.nvar):
+#    pick = 0
+#    Pi,Si,Xi = scores[pick]
+#    if nExtra >= 0:
+#      mx = bisect.bisect_right(scores, (Pi,Si,gm.X[-1]))  # get one past last equal-priority & score vars
+#      pick = min(mx+nExtra, len(scores))                  # then pick a random "near-best" variable
+#      pick = np.random.randint(pick)
+#      Pi,Si,Xi = scores[pick]
+#    del scores[pick]
+#    _order[idx] = Xi.label        # write into order[idx] = Xi
+#    totalSize += adj[Xi].nrStatesDouble()
+#    if totalSize > cutoff: return target,cutoff  # if worse than cutoff, quit with no changes to "target"
+#    fix = VarSet()
+#    for Xj in adj[Xi]:
+#      adj[Xj] |= adj[Xi]
+#      adj[Xj] -= [Xi]
+#      fix |= adj[Xj]   # shouldn't need to fix as much for min-width?
+#    for Xj in fix:
+#      Pj,Sj,Xj = reverse[Xj]
+#      jPos = bisect.bisect_left(scores, (Pj,Sj,Xj))
+#      del scores[jPos]                        # erase (Pj,Sj,Xj) from heap 
+#      reverse[Xj] = (Pj,score(adj,Xj),Xj)     
+#      bisect.insort_left(scores, reverse[Xj]) # add (Pj,score(adj,Xj),Xj) to heap & update reverse lookup
+#  if not (target is None): 
+#    target.extend([None for i in range(len(target),len(_order))])  # make sure order is the right size
+#    for idx in range(gm.nvar): target[idx]=_order[idx]   # copy result if completed without quitting
+#  return _order,totalSize
 
 
 def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None, target=None):
@@ -690,12 +553,15 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None,
   Using ``target`` and ``cutoff`` one can easily search for better orderings by repeated calls:
   >>> ord, score = eliminationOrder(model, 'minfill', nExtra=2, cutoff=score, target=ord) 
   """
+  import bisect
   orderMethod = 'minfill' if orderMethod is None else orderMethod.lower()
   priority = [1 for x in gm.X] if priority is None else priority
 
   if   orderMethod == 'minfill':    score = lambda adj,Xj: 0.5*sum([len(adj[Xj]-adj[Xk]) for Xk in adj[Xj]])
+  elif orderMethod == 'wtminfill1': score = lambda adj,Xj: sum([Xk.states*Xl.states for Xk in adj[Xj] for Xl in adj[Xj]-adj[Xk]])
   elif orderMethod == 'wtminfill':  score = lambda adj,Xj: sum([(adj[Xj]-adj[Xk]).nrStatesDouble() for Xk in adj[Xj]])
   elif orderMethod == 'minwidth':   score = lambda adj,Xj: len(adj[Xj])
+  elif orderMethod == 'wtminwidth1': score = lambda adj,Xj: sum([Xk.states*Xl.states for Xk in adj[Xj] for Xl in adj[Xj]-[Xk]])
   elif orderMethod == 'wtminwidth': score = lambda adj,Xj: adj[Xj].nrStatesDouble()
   elif orderMethod == 'random':     score = lambda adj,Xj: np.random.rand()
   else: raise ValueError('Unknown ordering method: {}'.format(orderMethod))
@@ -721,16 +587,16 @@ def eliminationOrder(gm, orderMethod=None, nExtra=-1, cutoff=inf, priority=None,
     _order[idx] = Xi.label        # write into order[idx] = Xi
     totalSize += adj[Xi].nrStatesDouble()
     if totalSize > cutoff: return target,cutoff  # if worse than cutoff, quit with no changes to "target"
-    fix = VarSet()
-    for Xj in adj[Xi]:
+    fix = adj[Xi].copy()          # fix up (at least) scores of variables adjacent to Xi
+    for Xj in adj[Xi]:            # update Markov graph to reflect removal of Xi: join Xi's neighbors
       adj[Xj] |= adj[Xi]
-      adj[Xj] -= [Xi]  # TODO adj[Xj].remove(Xi) slightly faster but still unsupported by cython version
-      fix |= adj[Xj]   # shouldn't need to fix as much for min-width?
-    for Xj in fix:
+      adj[Xj] -= [Xi,Xj]  # TODO adj[Xj].remove(Xi) slightly faster but still unsupported by cython version
+      fix |= adj[Xj]              # also fix scores of 2nd neighbors for min-fill (shouldn't need to fix as much for min-width?)
+    for Xj in fix:                # Now, update the scores of "fix" set in the priority queue:
       Pj,Sj,Xj = reverse[Xj]
       scores.remove(reverse[Xj])
-      reverse[Xj] = (Pj,score(adj,Xj),Xj)
-      scores.add(reverse[Xj]) # add (Pj,score(adj,Xj),Xj) to heap & update reverse lookup
+      reverse[Xj] = (Pj,score(adj,Xj),Xj)  # re-score Xj
+      scores.add(reverse[Xj])     # add (Pj,score(adj,Xj),Xj) to heap & update reverse lookup
   if not (target is None): 
     target.extend([None for i in range(len(target),len(_order))])  # make sure order is the right size
     for idx in range(gm.nvar): target[idx]=_order[idx]   # copy result if completed without quitting
@@ -850,35 +716,32 @@ def factorOrder(factors, varOrder):
 # ?? do without actually conditioning? condition on the fly: 
 #   compute the norm, sample, etc. manually in f'n
 
-#def forwardSample(model, varOrder, factorOrder=None):
-def sampleSequential(model, varOrder, factorOrder=None):
-  """Draw a configuration X sequentially from the model factors.
-  For a Bayes net using a valid topological order, this is equivalent to forward sampling.
- 
-  Returns logQ,xs  (tuple): the sampled config xs and its log-probability under the sampling distribution
-  """
-  if factorOrder is None: factorOrder = []
-  if len(factorOrder)==0:
-    raise NotImplementedError
-    # figure out an ordering of the factors in "model" to use & store them in factorOrder:
-    # for each xi in varOrder:
-    #   from model, get factors with xi
-    #   from small->large (?) check if args all in "done"; if so, add to factorOrder
-    #   add xi to done
-  #x = [-1 for Xi in varOrder]         # storage for sample value
-  s = {}                              # storage for sample value
-  #lnP, lnW = 0.0, 0.0                 # log p(x) of drawn sample & log w(x) = f(x)/p(x)
-  lnP = 0.0                           # log p(x) of drawn sample
-  # TODO: enumerate over varOrder instead; use factorOrder[i], then weight by factorOrd[i:] after
-  for i,f in enumerate(factorOrder):  # sample Xi from F[i | prev]:
-    xi  = varOrder[i]
-    Pxi = f.condition( s )
-    # TODO: check Pxi over one var, xi
-    Zi  = Pxi.sum()
-    s[ xi ], = Pxi.sample(Z=Zi)  # draw sample for i'th variable
-    lnP += np.log( Pxi[s[xi]] / Zi )
-  s_list = [ s[i] for i in range(len(s)) ]
-  return lnP, s_list   
+#def sampleSequential(model, varOrder, factorOrder=None):
+#  """Draw a configuration X sequentially from the model factors.
+#  For a Bayes net using a valid topological order, this is equivalent to forward sampling.
+# 
+#  Returns xs,lnQ : the sampled config xs (tuple) and its log-probability under the sampling distribution (float)
+#  """
+#  if factorOrder is None: factorOrder = []
+#  if len(factorOrder)==0:
+#    raise NotImplementedError
+#    # figure out an ordering of the factors in "model" to use & store them in factorOrder:
+#    # for each xi in varOrder:
+#    #   from model, get factors with xi
+#    #   from small->large (?) check if args all in "done"; if so, add to factorOrder
+#    #   add xi to done
+#  s = {}                              # storage for sample value
+#  lnP = 0.0                           # log p(x) of drawn sample
+#  # TODO: enumerate over varOrder instead; use factorOrder[i], then weight by factorOrd[i:] after
+#  for i,f in enumerate(factorOrder):  # sample Xi from F[i | prev]:
+#    xi  = varOrder[i]
+#    Pxi = f.condition( s )
+#    # TODO: check Pxi over one var, xi
+#    Zi  = Pxi.sum()
+#    s[ xi ], = Pxi.sample(Z=Zi)  # draw sample for i'th variable
+#    lnP += np.log( Pxi[s[xi]] / Zi )
+#  s_list = [ s[i] for i in range(len(s)) ]
+#  return s_list, lnP
    
 
 

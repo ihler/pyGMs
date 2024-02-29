@@ -23,6 +23,10 @@ except ImportError:
 
 inf = float('inf')
 
+def _cfg2str(cfg,X=None): 
+  if X is None: X = range(max(cfg.keys())+1)
+  return ''.join(str(cfg[i]) if i in cfg else '-' for i in X);
+
 
 orderMethod = 'F'   # TODO: currently stores in fortran order (as Matlab); should be trivially changable
 #orderMethod = 'C'  #   Can we make this "seamless" to the user, and/or force them to do something consistent?
@@ -99,7 +103,7 @@ class Factor(object):
        >>> g = changeVars( f, [X7,X5])   # now,  g(X5=b,X7=a) = f(X0=a,X1=b)
     """
     v = VarSet(vars)
-    newOrder = map(lambda x:vars.index(x), v)
+    newOrder = tuple(map(lambda x:vars.index(x), v))
     if copy: ret = Factor(v, self.t.transpose(newOrder))
     else:    ret = Factor().__build(v, self.t.transpose(newOrder))  # try not to copy if possible
     return ret

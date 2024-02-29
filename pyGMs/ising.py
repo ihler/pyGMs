@@ -24,8 +24,10 @@ from numpy import asarray as arr
 from numpy import atleast_2d as twod
 
 def toPM(x):
+    """Convert data (nparray) from values {0,1} to {-1,+1}"""
     return 2*x-1
 def to01(x):
+    """Convert data (nparray) from values {-1,+1} to {0,1}"""
     return (x>0).astype(int)
 
 class Ising(object):
@@ -379,6 +381,60 @@ def __dpll(L,h,x, L2=0):
     return dL.tocsr(),dh
 
 
+def refit_moments(model, data, alpha=1e-4, weights=None):
+    """Set the parameters of the model to match locally the empirical data probabilities (max likelihood for trees)
+      model : an Ising model to re-fit (will keep edge structure)
+      data: (m,n) nparray of m data points; values {0,1}
+    """
+    def moments(data, weights):
+        """Estimate mutual information between all pairs of *binary* {0,1} variables"""
+        pi = np.average(data.astype(float),axis=1,weights=weights)[np.newaxis,:]
+        pij = np.cov(data,ddof=0,aweights=weights) + (pi.T.dot(pi));
+        return pij,pi[0]
+        
+    n,m = data.shape
+    pij,pi = moments(data.T, weights)       # data should be 0/1, not -1/+1
+    factors = [Factor([Var(i,2)], [1-pi[i],pi[i]]) for i in range(n)]
+    L = coo(model.L)
+    for i,j,th in zip(L.row,L.col,L.data):
+        if j>i: continue
+        tij = [1+pij[i,j]-pi[i]-pi[j], pi[i]-pij[i,j], pi[j]-pij[i,j], pij[i,j]]
+        fij = Factor([Var(int(i),2),Var(int(j),2)],tij)+alpha;
+        fij = fij / fij.sum([i]) / fij.sum([j])
+        factors.append(fij)
+    model.__init__(factors)
+
+
+def refit_ipf(model, data, maxiter=10, stoptol=1e-4, alpha=1e-4, weights=None):
+    """Set the parameters of the model to match the empirical data probabilities (max likelihood) (slow!)
+      model : an Ising model to re-fit (will keep edge structure)
+      data: (m,n) nparray of m data points; values {0,1}
+    """
+    def moments(data, weights):
+        """Estimate mutual information between all pairs of *binary* {0,1} variables"""
+        pi = np.average(data.astype(float),axis=1,weights=weights)[np.newaxis,:]
+        pij = np.cov(data,ddof=0,aweights=weights) + (pi.T.dot(pi));
+        return pij,pi[0]
+       
+    from pyGMs.wmb import JTree
+    import random
+    n,m = data.shape
+    pij,pi = moments(data.T, weights)       # data should be 0/1, not -1/+1
+    order = eliminationOrder(model, 'minwidth')[0];
+    L = coo(model.L); edges = list([(int(i),int(j)) for i,j in zip(L.row,L.col) if i<j])
+    for it in range(maxiter):
+        random.shuffle(edges)
+        done=True
+        for i,j in edges:
+            tij = [1+pij[i,j]-pi[i]-pi[j], pi[i]-pij[i,j], pi[j]-pij[i,j], pij[i,j]]
+            fij = Factor([Var(i,2),Var(j,2)],tij)+alpha;
+            jt = JTree(model, elimOrder=order)
+            lnZ = jt.msgForward()
+            bij = jt.msgBackward( beliefs = [fij.vars] )[fij.vars]
+            if (fij-bij).abs().max() > stoptol: done=False
+            model.addFactors( [fij/bij] )
+        if done: break
+    return
 
 
 def refit_pll_sgd(model,data, initStep=.01, maxIter=1000, verbose=False):
@@ -446,13 +502,17 @@ def fit_logregL1(data, C=.01):
     # for each Xi, estimate the neighborhood of Xi using L1-reg logistic regression:
     nbrs,th_ij,th_i = [None]*n, [None]*n, np.zeros((n,))
     Xtr, Xtmp = toPM(data.T), toPM(data.T)  # make two copies so we can modify; TODO: internal (n,m) shape
+    XtrE = np.hstack( (Xtr,np.zeros((n,2))) )
+    XtmpE= np.hstack( (Xtmp,np.zeros((n,2))) )
     for i in range(n):  
-        Xtmp[i,:] = 0.        # remove ourselves
-        lr = LogisticRegression(penalty='l1',C=C,solver='liblinear').fit(Xtmp.T,Xtr[i,:])
+        XtmpE[i,:] = 0.        # remove ourselves
+        XtrE[i,-2:]=[-1,1];  # ensure at least one +1 & -1
+        lr = LogisticRegression(penalty='l1',C=C,solver='liblinear').fit(XtmpE.T,XtrE[i,:])
         nbrs[i] = np.where(np.abs(lr.coef_) > 1e-6)[1]
         th_ij[i]= lr.coef_[0,nbrs[i]]/2.
         th_i[i] = lr.intercept_/2.
-        Xtmp[i,:] = Xtr[i,:]; # & restore after
+        XtrE[:,-2:] = 0     # blank out "pseudo" data
+        XtmpE[i,:] = XtrE[i,:]; # & restore after
     
     # Collect single-variable factors
     factors = [Factor(Var(i,2),[-t,t]).exp() for i,t in enumerate(th_i)]

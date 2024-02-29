@@ -27,7 +27,11 @@ class NodeDFS(object):
     self.heuristic = None
     self.X = X
     self.x = x   # node is for assignment X=x given ancestor assigments
-
+  def __str__(self): 
+    return(('' if self.parent is None else (str(self.parent)+',')) + 
+           ('' if self.X is None else (str(self.X)+'.')) +
+           ('' if self.x is None else str(self.x)))
+  def __lt__(self,other): return self.value < other.value
 
 
 class PrunedDFS(object):
@@ -85,8 +89,10 @@ class PrunedDFS(object):
 
         if not self.prune(n):           # if not pruned, expand n & generate children:
           X,vals = n.heuristic.next_var(self.cfg,n.X,n.x)
-          idx = np.argsort(vals)
-          n.children = [NodeDFS(n,X,i,vals[i]) for i in idx]
+          n.children = [(-vals[i],NodeAStar(n,X,i,vals[i])) for i in idx]
+          heapq.heapify(n.children)
+          #idx = np.argsort(vals)
+          #n.children = [NodeDFS(n,X,i,vals[i]) for i in idx]
           for c in n.children: c.heuristic = n.heuristic   # point to previous heuristic
 
         # Now move on to the next node in the queue
@@ -103,6 +109,11 @@ class NodeAStar(object):
     self.heuristic = None
     self.X = X
     self.x = x   # node is for assignment X=x given ancestor assigments
+  def __str__(self): 
+    return(('' if self.parent is None else (str(self.parent)+',')) + 
+           ('' if self.X is None else (str(self.X)+'.')) +
+           ('' if self.x is None else str(self.x)))
+  def __lt__(self,other): return self.value < other.value
 
 class AStar(object):
   """A-Star heuristic search """

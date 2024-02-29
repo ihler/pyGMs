@@ -32,10 +32,20 @@ def is2D(D):
     except: 
         return False
 
+
+def np2str(nparr,precision=2):
+    return np.array_str( nparr, precision=precision)
+
+def np2str1(nparr,precision=2,maxlen=None):
+    st = np.array_str( nparr, precision=precision).replace('\n','')
+    if (maxlen is not None) and (len(st)>maxlen): st = st[:maxlen] + "..."
+    return st
+
+
 ################################################################################################
 # Estimating empirical frequencies
 #
-def empirical( cliques, data, normalize=False):
+def empirical( cliques, data, weights=None, normalize=False):
     """Compute the empirical counts of each configuration of the cliques within the data
        Data should be integer, 0...d; any missing data (`nan') skipped (per clique)
        cliques (list) : list of VarSets; which subsets of variables to examine
@@ -46,11 +56,11 @@ def empirical( cliques, data, normalize=False):
     for i,vs in enumerate(cliques):
         vs = VarSet(vs)                     # make sure these are OK & sorted
         try:    vs_data = data[:,[int(v) for v in vs]]      # 2d nparray data
-        except: vs_data = np.array([data[v] for v in vs])   # dict or 1d array
+        except: vs_data = np.array([[x[v] for v in vs] for x in data])   # dict or 1d array
         factors[i] = Factor(vs, 0.)
-        for xs in vs_data:
+        for s,xs in enumerate(vs_data):
           if np.any(np.isnan(xs)): continue    # skip data with missing entries  
-          factors[i].t[ tuple(xs.astype(int)) ] += 1.
+          factors[i].t[ tuple(xs.astype(int)) ] += 1. if weights is None else weights[s]
         if normalize: factors[i].t /= factors[i].sum()
     return factors 
 
@@ -115,6 +125,7 @@ def ising_grid(n=10,d=2,sigp=1.0,sigu=0.1):
   #fs.extend( [Factor([X[i],X[j]],np.exp(sigp*np.random.randn(d,d)*(1.0-np.eye(d)))) for i,j in E] )
   return fs
 
+# TODO: flag to force ising model to be ferromagnetic? "force_sign = None/+1/-1?"
 
 def boltzmann(theta_ij):
   '''Create a pairwise graphical model from a matrix of parameter values.  
@@ -132,6 +143,26 @@ def boltzmann(theta_ij):
   return factors
 
 
+def random3SAT(alpha,n):
+    '''Create a random 3-SAT problem in CNF form
+      alpha : float : ratio of variables to clauses
+      n     : int   : number of variables
+      Returns a list of pyGMs Factors corresponding to each clause.
+    '''
+    import random
+    p = int(round(alpha*n))
+    X = [gm.Var(i,2) for i in range(n)] 
+    factors = []
+    for i in range(p):
+        #idx = [np.random.randint(n), np.random.randint(n), np.random.randint(n)]
+        idx = random.sample(range(n),3)
+        f = gm.Factor([X[idx[0]],X[idx[1]],X[idx[2]]],1.0)
+        cfg = [np.random.randint(2), np.random.randint(2), np.random.randint(2)]
+        f[cfg[0],cfg[1],cfg[2]] = 0.0
+        factors.append(f)
+    return factors
+
+## TODO: add random spatial graph generators? (Table distributions?)
 
 
 def fit_chowliu(data, penalty=0, weights=None):
