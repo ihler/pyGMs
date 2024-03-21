@@ -397,12 +397,12 @@ class Factor(object):
 
   #### ELIMINATION OPERATIONS ####
   def sum(self, elim=None, out=None):
-    """Eliminate via sum on F, e.g., f(X_2) = \sum_{x_1} F(x_1,X_2) = F.sum([X1])"""
+    """Eliminate via sum on F, e.g., f(X_2) = \\sum_{x_1} F(x_1,X_2) = F.sum([X1])"""
     if (elim is None): elim = self.v
     return self.__opReduce2(self.v & elim,np.sum, out=out)
 
   def marginal(self, target, out=None):
-    """Compute the marginal of F, e.g., f(X_2) = \sum_{x_1} F(x_1,X_2) = F.marginal([X2])"""
+    """Compute the marginal of F, e.g., f(X_2) = \\sum_{x_1} F(x_1,X_2) = F.marginal([X2])"""
     return self.__opReduce2(self.v - target,np.sum, out=out)
 
   def sumPower(self, elim=None, power=1.0, out=None):
@@ -413,12 +413,12 @@ class Factor(object):
     return tmp
 
   def lse(self, elim=None, out=None):
-    """Eliminate via log-sum-exp on F, e.g., f(X_2) = log \sum_{x_1} exp F(x_1,X_2) = F.lse([X1])"""
+    """Eliminate via log-sum-exp on F, e.g., f(X_2) = log \\sum_{x_1} exp F(x_1,X_2) = F.lse([X1])"""
     if (elim is None): elim = self.v
     return self.__opReduce3(self.v & elim, np.logaddexp.reduce, out=out)
 
   def lsePower(self, elim=None, power=1.0, out=None):
-    """Eliminate via powered log-sum-exp, e.g., f(X_2) = 1/p log \sum_{x_1} exp F(x_1,X_2)*p = F.lsePower([X_1],p)"""
+    """Eliminate via powered log-sum-exp, e.g., f(X_2) = 1/p log \\sum_{x_1} exp F(x_1,X_2)*p = F.lsePower([X_1],p)"""
     if (elim is None): elim = self.v
     if   power == inf: return self.max(elim)
     elif power == -inf: return self.min(elim)
@@ -429,21 +429,21 @@ class Factor(object):
       return tmp
 
   def max(self, elim=None, out=None):
-    """Eliminate via max on F, e.g., f(X_2) = \max_{x_1} F(x_1,X_2) = F.max([X1])"""
+    """Eliminate via max on F, e.g., f(X_2) = \\max_{x_1} F(x_1,X_2) = F.max([X1])"""
     if (elim is None): elim = self.v
     return self.__opReduce2(self.v & elim,np.max, out=out)
 
   def maxmarginal(self, target, out=None):
-    """Compute the max-marginal of F, e.g., f(X_2) = \max_{x_1} F(x_1,X_2) = F.maxmarginal([X2])"""
+    """Compute the max-marginal of F, e.g., f(X_2) = \\max_{x_1} F(x_1,X_2) = F.maxmarginal([X2])"""
     return self.__opReduce2(self.v - target,np.max, out=out)
 
   def min(self, elim=None, out=None):
-    """Eliminate via min on F, e.g., f(X_2) = \min_{x_1} F(x_1,X_2) = F.min([X1])"""
+    """Eliminate via min on F, e.g., f(X_2) = \\min_{x_1} F(x_1,X_2) = F.min([X1])"""
     if (elim is None): elim = self.v
     return self.__opReduce2(self.v & elim,np.min, out=out)
 
   def minmarginal(self, target, out=None):
-    """Compute the min-marginal of F, e.g., f(X_2) = \min_{x_1} F(x_1,X_2) = F.minmarginal([X2])"""
+    """Compute the min-marginal of F, e.g., f(X_2) = \\min_{x_1} F(x_1,X_2) = F.minmarginal([X2])"""
     return self.__opReduce2(self.v - target,np.min, out=out)
 
 

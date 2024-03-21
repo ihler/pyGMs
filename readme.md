@@ -1,4 +1,4 @@
-pyGM : A Python toolbox for Graphical Models
+pyGMs : A Python toolbox for Graphical Models
 ================
 
 This code provides a simple Python-based interface for defining probabilistic
@@ -14,7 +14,7 @@ and [scipy](https://www.scipy.org/) as well.
 
 ## Installation
 
-Simply download or clone the repository to a directory *pyGM*, and add its
+Simply download or clone the repository to a directory *pyGMs*, and add its
 parent directory to your Python path, either:
 ```
 $ export PYTHONPATH=${PYTHONPATH}:/directory/containing/

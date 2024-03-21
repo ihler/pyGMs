@@ -36,8 +36,8 @@ class GraphModel(object):
   >>> flist = readUai('myfile.uai')  # read a list of factors from a UAI format file
   >>> model = GraphModel(flist)      # makes a copy of the factors for manipulation
 
-  The model may be stored in an exponential, product of factors form:  f(X) = \prod_r f_r(X_r),
-  or in a log-probability, sum of factors form:  \theta(X) = \sum_r \theta_r(X_r).
+  The model may be stored in an exponential, product of factors form:  f(X) = \\prod_r f_r(X_r),
+  or in a log-probability, sum of factors form:  \theta(X) = \\sum_r \theta_r(X_r).
   
   Various accessor functions enable finding factors that depend on one or more variables, variables that
   share one or more factors (their Markov blanket), manipulations to the graph (such as eliminating one
@@ -104,7 +104,22 @@ class GraphModel(object):
     return len(self.factors)
 
   ###################################################
-  ## Basic transforms. "Log" model => additive cliques, "Exp" model => multiplicative cliques
+  ## (Partial) configurations of the model variables can be represented as dicts or tuples:
+
+  def as_tuple(config, X=self.X):
+    """Convert a (partial) configuration represented as a dict into a tuple.
+      Variables in self.X missing from config are represented as NaN.
+    """
+    return tuple(config[x] if x in config else np.nan for x in X)
+
+  def as_dict(config, X=self.X):
+    """Convert a (partial) configuration represented as a tuple into a dict.
+      Config entries specified by NaN are excluded.
+    """
+    return {x:config[x] for x in X if not np.isnan(config[x])}
+
+  ###################################################
+  ## Basic model transforms. "Log" model => additive cliques, "Exp" model => multiplicative cliques
 
   def toLog(self):
     """Convert internal factors to log form (if not already).  May use 'isLog' to check."""
@@ -132,7 +147,7 @@ class GraphModel(object):
       f.table = np.maximum( f.table, eps )
 
   def value(self,x,subset=None):
-    """Evaluate F(x) = \prod_r f_r(x_r) for some (full) configuration x.
+    """Evaluate F(x) = \\prod_r f_r(x_r) for some (full) configuration x.
          If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
     if not _is2D(x): x=[x]
@@ -141,7 +156,7 @@ class GraphModel(object):
     else:          return np.product( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
 
   def logValue(self,x,subset=None): 
-    """Evaluate log F(x) = \sum_r log f_r(x_r) for some (full) configuration x.
+    """Evaluate log F(x) = \\sum_r log f_r(x_r) for some (full) configuration x.
          If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
     if not _is2D(x): x=[x]
@@ -332,7 +347,7 @@ class GraphModel(object):
       self.X[v] = Var(int(v),1)    # remove "concept" of variable v ( => single state)
 
   def joint(self):
-    """Compute brute-force joint function F(x) = \prod_r f_r(x_r) as a (large) factor"""
+    """Compute brute-force joint function F(x) = \\prod_r f_r(x_r) as a (large) factor"""
     F = self.factors[0].copy()
     for f in self.factors[1:]: 
       if self.isLog: F += f
@@ -364,10 +379,6 @@ class GraphModel(object):
     # NOTE: don't forget about any scalar factors: [f for f in model.factors where f.nvar==0]
     
     
-    
-
-
-
   ############# FUNCTIONS TODO ######################
   
   # Algorithms:

@@ -1,7 +1,7 @@
 """
 Weighted graphical model:
 A graphical model (GraphModel) augmented with an elimination order and weights (temperatures) for each Xi 
-Corresponds to an inference problem, Phi_w = \log [ ... \wsum_{x_i} ... \exp[ \sum_r \theta_r(X_r) ] ... ]
+Corresponds to an inference problem, Phi_w = \\log [ ... \\wsum_{x_i} ... \\exp[ \\sum_r \\theta_r(X_r) ] ... ]
 Always maintains factors in log form (theta_r)
 
 Constructor takes factors, order (default 1..N), weights (default 1.0)

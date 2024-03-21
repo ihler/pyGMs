@@ -24,15 +24,17 @@ from .graphmodel import *
 
 from builtins import range
 try:
-    from itertools import izip
+    from itertools import izip    # OLD python versions required this
 except:
-    izip = zip
+    izip = zip                    # more recent versions we can just do this
 
 
 reverse_enumerate = lambda l: izip(range(len(l)-1, -1, -1), reversed(l))
 
 class WMB(object):
-    '''Class implementing weighted mini-bucket elimination inference'''
+    '''Class implementing weighted mini-bucket elimination inference.
+    See documentation and example notebooks for usage.
+    '''
 
     # Internal object / structure for representing a mini-bucket
     class Node:
@@ -55,13 +57,22 @@ class WMB(object):
 
 
     class ConstantList:
+        """Internal helper object for treating scalars and lists interchangably"""
         def __init__(self, val):
             self.val = val
         def __getitem__(self, loc):
             return self.val
 
 
-    def __init__(self, model, elimOrder=None, iBound=0, sBound=0, weights=1.0, attach=True, **kwargs):
+    def __init__(self, model, elimOrder=None, iBound=None, sBound=None, weights=1.0, attach=True, **kwargs):
+        """Construct a mini-bucket object from a given graphical model.
+          model : GraphModel object representing the graphical model
+          elimOrder : an elimination order (list-like) or method (e.g. "minfill")
+          iBound : maximum number of variables in any mini-bucket clique
+          sBound : maximum number of state configurations for any mini-bucket clique
+          weights: weighted elimination per bucket; see setWeights()
+          attach : construct clique functions (True) or postpone until later (False)
+        """
         # TODO: check if model isLog() true
         # save a reference to our model
         self.model = model
@@ -80,16 +91,16 @@ class WMB(object):
 
         # now build the mini-bucket data structure
         self.buckets = [ [] for x in range(model.nvar) ]  # bucket for each var: list of minibuckets 
-        self.matches = [ [] for x in range(model.nvar) ] # matching sets for each bucket
-        self.setWeights(weights)   # TODO: duplicate to initialize (!)
+        self.matches = [ [] for x in range(model.nvar) ]  # matching sets for each bucket
+        self.weights = WMB.ConstantList(1.0)              # default to sum+ during construction
         for f in model.factors:
             if len(f.vars)==0: continue;      #TODO: should add anyway (somewhere)
             n = self.addClique(f.vars)
-            # TODO: check if model.isLog already when attaching...
-            if attach: n.theta += f.log()                 # include log f(x) in node's log-factor
+            if attach: n.theta += f if model.isLog else f.log()  # include log f(x) in node's log-factor
             n.originals.append(f)              # append (pointer to) original f for later reference
-        # and set the weights of the buckets:
-        self.setWeights(weights)
+        if iBound is not None or sBound is not None:      # perform merging if criteria given at init
+            self.merge(self.scoreByScope(ibound=iBound,sbound=sBound))
+        self.setWeights(weights)                          # and set the weights of the buckets
  
     def setWeights(self,weights):
         """Set the weights of the inference problem.
@@ -124,6 +135,7 @@ class WMB(object):
         return i,j
    
     def __repr__(self):     
+        """Detailed representation of the mini-bucket structure as a text string"""
         to_return = ""
         for i,b in enumerate(self.buckets):
             to_return += "{:03d}: ".format(int(self.elimOrder[i]))
@@ -132,19 +144,10 @@ class WMB(object):
             to_return += "\n"
         return to_return
 
-#    def draw(self):
-#        import pygraphviz
-#        G = pygraphviz.AGraph()
-#        for i,b in enumerate(self.buckets):
-#            for j,mb in enumerate(b):
-#                G.add_node(self.__nodeID(mb))
-#        for i,b in enumerate(self.buckets):
-#            for j,mb in enumerate(b):
-#                G.add_edge(self.__nodeID(mb),self.__nodeID(mb.parent))
-#        G.layout()        # layout with default (neato)
-#        G.draw('wmb.png') # draw png
-
     def draw(self):
+        """Draw mini-bucket tree in networkx.  Limited usefulness without good positioning.
+        Returns the networkx DiGraph of the mini-bucket tree.
+        """
         import networkx as nx
         pos,labels = {},{}
         G = nx.DiGraph()
@@ -170,11 +173,11 @@ class WMB(object):
         found = False
         for x in corder:
             if found: break
-            #print "bucket ",x
+            #print("bucket ",x)
             b = self.buckets[self.priority[x]]
             to_remove = []
             for mb in b:
-                #print "  check ",mb
+                #print("  check ",mb)
                 if mb.clique < vs:
                    to_remove.append(mb)
                 if mb.clique >= vs:                # if we found a minibucket we can just join, do:
@@ -182,7 +185,7 @@ class WMB(object):
                         mb.children.append( added[-1] )  # of the found node, and found node as parent of last
                         added[-1].parent = mb          
                     found = True                   # now, we don't need to keep generating parents
-                    #print "    Found!"
+                    #print("    Found!")
                     added.append(mb)               # not really added, but the end of the added chain
                     break
             # if we didn't find any mini-buckets we can join, we need to add one:
@@ -190,7 +193,7 @@ class WMB(object):
                 n = WMB.Node()
                 n.clique = VarSet(vs)
                 n.weight = -1e-3 if self.weights[x] < 0 else 1e-3;   # TODO: small non-zero weights
-                #print "adding ",n," to ",self.priority[x]
+                #print("adding ",n," to ",self.priority[x])
                 b.append(n)
                 if len(added) > 0:                 #   then, last added node is the child of this one
                     n.children.append(added[-1])
@@ -224,12 +227,12 @@ class WMB(object):
         """Re-attach factor tables to their associated cliques for evaluation"""
         for b in self.buckets:
             for mb in b:
-                mb.theta = Factor([],0.)
-                for f in mb.originals: mb.theta += f.log()
-    # TODO: check if already in log form???
+                mb.theta = Factor([],0.)    # TODO: need to ensure Xb is there in case no factor includes it?
+                for f in mb.originals: 
+                    mb.theta += f if self.model.isLog else f.log()  # TODO: check if already in log form?
 
     def memory(self, bucket=None, use_backward=True):
-        """Compute the total memory (in MB) required for this mini-bucket approximation"""
+        """Estimate the total memory (in MB) required for this mini-bucket approximation"""
         mem = 0.
         use_buckets = self.buckets if bucket is None else [self.buckets[bucket]]
         for b in use_buckets:
@@ -239,7 +242,6 @@ class WMB(object):
         return mem / 1024. / 1024.
 
     # TODO: convert to external function?  pass variable in; check if refinement of another?
-    #  Is score correct, or inverted?  check
     def scoreByScope(self, ibound=None, sbound=None):
       """Returns a scope-based scoring function for use in merge()"""
       def score(m1,m2):
@@ -248,13 +250,21 @@ class WMB(object):
         if sbound is not None and jt.nrStates() > sbound: return -1
         # TODO: also disallow if not consistent with some specified scope sets?
         mx,mn = max([len(m1.clique),len(m2.clique)]), min([len(m1.clique),len(m2.clique)])
-        return 1.0/(float(mx)+float(mn)/mx)
+        #return 1.0/(float(mx)+float(mn)/mx)   # prefers merging smaller cliques first
+        return (float(mx)+float(mn)/(mx+1))    # prefer merging largest cliques
       # return the scoring function 
       return score
 
 
     # score = len(max)+len(min)/len(max) if union < iBound else -1 for scope
     def merge(self, score):
+        """merge(score_function) : perform score-based merging of mini-buckets
+        Merging cliques of the mini-bucket tree typically improves accuracy at a computational cost.
+        score : a function, score(m1,m2), that evaluates a pair of mini-bucket cliques,
+                determines if they can be merged, and prioritizes them.
+                Higher value pairs are merged first; a negative return value indicates an invalid merge.
+                See WMB.scoreByScope() for an example.
+        """
         from heapq import heappush,heappop
         try:
           from itertools import count
@@ -269,19 +279,18 @@ class WMB(object):
             for i,m1 in enumerate(b):
                 for m2 in b[i+1:]:
                     s = score(m1,m2)
-                    if s >= 0.0:
-                        entry = [-s,tiebreak(),m1,m2]
+                    if s >= 0.0:                       # if the merge is allowed,
+                        entry = [-s,tiebreak(),m1,m2]  # add it to the priority heap
                         lookup[(m1,m2)] = entry
                         heappush(priority, entry)
             while len(priority):
-                entry = heappop(priority)
+                entry = heappop(priority)              # find the best pair to merge:
                 s,_,m1,m2 = entry[0],entry[1],entry[2],entry[3]
                 #s,m1,m2 = priority.pop()
                 if m1 is None or m2 is None: continue
                 if m1 not in b or m2 not in b: continue   ## check for removed minibuckets?
-                #print b
-                #print "Merging ",m1,"+",m2
-                for m in b:
+                #print("Merging ",m1,"+",m2)
+                for m in b:                            # mark anything involving m1 or m2 as now invalid
                     for ma,mb in [(m1,m),(m,m1),(m2,m),(m,m2)]:
                         s = -lookup.get( (ma,mb), [1,None,None] )[0]
                         if s >= 0.0: 
@@ -290,28 +299,33 @@ class WMB(object):
                             #priority.remove( [s,ma,mb] )
                 m12 = self.addClique( m1.clique | m2.clique )
                 # what if others removed?  (bad check above?)
-                #print b
-                for m in b:
+                #print(b)
+                for m in b:                            # now check possible merges with new m1+m2
                     if m is m12: continue
                     s = score(m12,m)
-                    if s >= 0.0:
+                    if s >= 0.0:                       # if the merge is allowed, add it to queue
                         entry = [-s,tiebreak(),m12,m] 
                         lookup[ (m12,m) ] = entry
                         heappush(priority,entry)
         return None
 
 
-
-    def mergeScope(iBound=0, sBound=0): 
-        for Bi in self.buckets:
-            # TODO: sort bucket by size (or store sorted)
-            for mb in Bi:
-                # TODO: merge into largest clique that can fit
-                pass
+    ### Removed; equivalent to wmb.merge( wmb.scoreByScope(iB, sB) )
+    #def mergeScope(iBound=0, sBound=0): 
+    #    for Bi in self.buckets:
+    #        # TODO: sort bucket by size (or store sorted)
+    #        for mb in Bi:
+    #            # TODO: merge into largest clique that can fit
+    #            pass
 
     #@profile
     def msgForward(self, stepTheta=0.5, stepWeights=0.1):
-        """Compute a forward pass through all nodes and return the resulting bound"""
+        """Compute a forward pass through all nodes and return the resulting bound
+          stepTheta, stepWeights : step size of reparameterization updates (theta) and weights.
+            Ex: stepTheta = 1., stepWeights = 0.  => "moment matching" downward pass
+                stepTheta = 0., stepWeights = 0.  => Basic mini-bucket forward computation
+        Returns the current bound on the mini-bucket objective (lnZ or lnF, depending on weight settings)
+        """
         bound = 0.0
         for i,b in enumerate(self.buckets):
             X = self.model.vars[ self.elimOrder[i] ]
@@ -391,7 +405,10 @@ class WMB(object):
     #@profile
     def msgBackward(self, stepTheta=0.0, stepWeights=0.0, beliefs=None):
         """Compute a backward pass through all nodes
-           If beliefs is a list of cliques, returns the estimated beliefs on those cliques
+           stepTheta, stepWeights : update bound using step sizes on clique functions & weights
+           beliefs : a list of cliques (VarSets) on which to estimate marginal probabilities
+           Returns a map { clique :  factor } of cliques & estimated marginals
+           Raises ValueError if a requested clique is not present anywhere in the mini-bucket.
         """
         to_save = [[] for i in range(len(self.buckets))]
         if beliefs is None:
@@ -401,7 +418,7 @@ class WMB(object):
             # map cliques to buckets for checking
             for clique in beliefs:
                 to_save[ min([self.priority[x] for x in clique]) ].append(VarSet(clique))
-        for i,b in reverse_enumerate(self.buckets): #reversed(list(enumerate(self.buckets))):
+        for i,b in reverse_enumerate(self.buckets): 
             X = self.model.vars[ self.elimOrder[i] ]
             nNodes = len(b)
             beliefs_b = [ None for mb in b ]
@@ -431,18 +448,21 @@ class WMB(object):
                     c.msgBwd = beliefs_b[j].lse( mb.clique - c.clique )*c.weight - c.msgFwd
                     #c.msgBwd -= c.msgBwd.max()   # TODO normalize for convenience?
                     #c.msgBwd = (beliefs_b[j]*(1.0/mb.weight)).lse( mb.clique - c.clique )*c.weight - c.msgFwd
-                # TODO: compute marginal of any to_save[i] cliques that fit & not done
                 for c in to_save[i]:
-                    if c <= mb.clique and return_beliefs[c] is None: return_beliefs[c] = beliefs_b[j].lse( mb.clique - c )
+                    if c <= mb.clique and return_beliefs[c] is None: 
+                        return_beliefs[c] = beliefs_b[j].lse( mb.clique - c )
                 beliefs_b[j] = Factor().log() # clear out belief
         for c,f in return_beliefs.items(): 
-            f -= f.lse()
-            f.expIP()   # exponentiate and normalize beliefs before returning
-            #f /= f.sum()
+            if f is None: raise ValueError(f'Belief over {c} not available in WMB structure!')
+            f -= f.lse()      # exponentiate and normalize beliefs before returning
+            f.expIP()     
         return return_beliefs
 
 
     def reparameterize(self):
+        """reparameterize() : update the current mini-bucket clique factors to incorporate the forward messages
+          Useful for switching to a decomposition bound method after WMB message passing.
+        """
         for i,b in enumerate(self.buckets):
           for j,mb in enumerate(b):
             if mb.parent is not None:
@@ -452,6 +472,10 @@ class WMB(object):
 
 
     def gdd_update(self,maxstep=1.0,threshold=0.01):
+        """gdd_update : update the clique factors using generalized dual decomposition gradients.
+          Often slower than WMB messages, but should ensure monotonic bound changes.
+        """
+        from functools import reduce
         def wt_elim(f,w,pri):
             elim_ord = np.argsort( [pri[x] for x in f.vars] )
             tmp = f.copy();
@@ -540,10 +564,12 @@ class WMB(object):
 
     # TODO: rename greedy-assign?  Add optional partial config?
     def assignBackward(self):
-        """Perform a backward pass through all nodes, assigning the most likely value"""
+        """Perform a backward pass through all nodes, greedily assigning the most likely value.
+        If weights='max' and each bucket has only one mini-bucket, this returns the optimal model configuration.
+        """
         # TODO check & test  ; check for zero weights? (don't care?)
         x = {}
-        for i,b in reverse_enumerate(self.buckets): #reversed(list(enumerate(self.buckets))):
+        for i,b in reverse_enumerate(self.buckets):    
             X = self.model.vars[ self.elimOrder[i] ]
             bel = Factor([X],0.0)
             for j,mb in enumerate(b):
@@ -564,7 +590,6 @@ class WMB(object):
     def heuristic(self,X,config):
         """Evaluate the bound given partial assignment 'config' (including variable X and all later)"""
         return sum([mb.msgFwd.valueMap(config) for mb in self.atElim[X]])
-        #raise NotImplementedError   # TODO: fix
         # need desired pseudo-tree & track messages passing between earlier & later buckets
 
     def resolved(self,X,config):
@@ -583,7 +608,7 @@ class WMB(object):
         # TODO check for positive, unit sum weights?  (don't care?)
         x = {}
         logQx = 0.0
-        for i,b in reverse_enumerate(self.buckets): #reversed(list(enumerate(self.buckets))):
+        for i,b in reverse_enumerate(self.buckets): 
             X = self.model.vars[ self.elimOrder[i] ]
             qi = Factor([X],0.0)
             for j,mb in enumerate(b):
@@ -672,9 +697,7 @@ class JTree(WMB):
             to_return += "\n"
         return to_return
 
-#    def draw(self):
-#        import pygraphviz
-    # Smartly accommodate changes to the model?
+    # TODO?: Smartly accommodate changes to the model?
 
 
 

@@ -299,7 +299,7 @@ class Ising(object):
     return nx.from_scipy_sparse_matrix(self.L!=0)
     
   def pseudolikelihood(self, data):
-    """Compute the pseudo (log) likelihood, \sum_i \sum_j \log p(x^{(j)}_i | x^{(j)}_{\neg i})
+    """Compute the pseudo (log) likelihood, \\sum_i \\sum_j \\log p(x^{(j)}_i | x^{(j)}_{\neg i})
        data : (m,n) or (n,) array or dict of the values xi; values in {0,1}
     """
     if isinstance(data,dict): data = toPM(np.array([[data[i] for i in range(self.nvar)]]))

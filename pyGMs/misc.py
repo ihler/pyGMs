@@ -130,7 +130,7 @@ def ising_grid(n=10,d=2,sigp=1.0,sigu=0.1):
 def boltzmann(theta_ij):
   '''Create a pairwise graphical model from a matrix of parameter values.  
      .. math::
-       p(x) \propto \exp( \sum_{i \\neq j} \\theta_{ij} xi xj + \sum_i \\theta_{ii} xi )
+       p(x) \\propto \\exp( \\sum_{i \\neq j} \\theta_{ij} xi xj + \\sum_i \\theta_{ii} xi )
      theta : (n,n) array of parameters
   '''
   n = theta_ij.shape[0]
