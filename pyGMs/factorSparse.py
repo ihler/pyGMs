@@ -74,7 +74,9 @@ class FactorSparse(object):
     #if self.v.nrStatesDouble() > 1e8: raise ValueError("Too big!");
 
     self.t = {}
-    if not (type(vals) is float and vals==0.):
+    if type(vals) is dict:
+      self.t = vals
+    elif not (type(vals) is float and vals==0.):
       try:	
         tmp_t = np.empty(self.v.dims(), float, orderMethod);
         tmp_t[:] = vals

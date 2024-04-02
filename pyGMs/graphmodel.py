@@ -106,16 +106,18 @@ class GraphModel(object):
   ###################################################
   ## (Partial) configurations of the model variables can be represented as dicts or tuples:
 
-  def as_tuple(config, X=self.X):
+  def as_tuple(self, config, X=None):
     """Convert a (partial) configuration represented as a dict into a tuple.
       Variables in self.X missing from config are represented as NaN.
     """
+    if X is None: X = self.X
     return tuple(config[x] if x in config else np.nan for x in X)
 
-  def as_dict(config, X=self.X):
+  def as_dict(self, config, X=None):
     """Convert a (partial) configuration represented as a tuple into a dict.
       Config entries specified by NaN are excluded.
     """
+    if X is None: X=self.X
     return {x:config[x] for x in X if not np.isnan(config[x])}
 
   ###################################################
