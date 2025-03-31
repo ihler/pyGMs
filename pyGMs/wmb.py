@@ -150,6 +150,7 @@ class WMB(object):
         """
         import networkx as nx
         pos,labels = {},{}
+        roots = []
         G = nx.DiGraph()
         for i,b in enumerate(self.buckets):
             for j,mb in enumerate(b):
@@ -159,6 +160,27 @@ class WMB(object):
         for i,b in enumerate(self.buckets):
             for j,mb in enumerate(b):
                 if mb.parent is not None: G.add_edge(str(mb),str(mb.parent))
+                else: roots.append(mb)
+        # Revise x-positions to respect descendent positions
+        def _revise(self, root, w=1., x=0.5, pos=None, par=None):
+            if type(root) is list: children = root
+            else:
+                pos[str(root)] = (np.round(x,4), pos[str(root)][1]) 
+                children = root.children
+            if len(children):
+                dx = w/(len(children))
+                x_ = x - w/2 - dx/2
+                for ch in children:
+                    x_ += dx
+                    pos = _revise(self,ch, w=dx, x=x_, pos=pos, par=root)
+            return pos
+        pos = _revise(self,roots,pos=pos)
+
+        # Now revise x-positions more uniformly
+        xvals = np.unique([pos[p][0] for p in pos])
+        xmap = {x:i*1./len(xvals) for i,x in enumerate(xvals)}
+        for p in pos: pos[p]=(xmap[pos[p][0]],pos[p][1])
+
         nx.draw(G, pos=pos, labels=labels)
         return G
 
@@ -578,14 +600,21 @@ class WMB(object):
             x[X] = bel.argmax()[0]
         return x
 
-    def initHeuristic(self):
+    def initHeuristic(self, pseudotree=None):
         """TODO: make this function unnecessary; make work for and/or pseudotree (currently or only)"""
         self.atElim = [ [] for b in self.buckets ]
+        if pseudotree is not None: assert(np.all([x==x_ for x,x_ in zip(self.elimOrder,pseudotree.order)]))
         for i,b in enumerate(self.buckets):
           for j,mb in enumerate(b):
             if mb.parent is not None:
               pi,pj = self.__nodeID(mb.parent)
-              for ii in range(i+1,pi+1): self.atElim[ii].append(mb);
+              ii_ = i+1 if pseudotree is None else self.priority[pseudotree.parent[self.elimOrder[i]]]
+              for ii in range(i+1,pi+1): 
+                  if pseudotree:           # if we have a pseudotree, follow its parent arrows down to pi
+                      if ii<ii_: continue
+                      else: 
+                          if ii!=pi: ii_ = self.priority[pseudotree.parent[self.elimOrder[ii]]]
+                  self.atElim[self.elimOrder[ii]].append(mb);
 
     def heuristic(self,X,config):
         """Evaluate the bound given partial assignment 'config' (including variable X and all later)"""

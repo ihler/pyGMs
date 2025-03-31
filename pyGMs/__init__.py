@@ -4,8 +4,8 @@ pyGMs: Python Graphical Model code
 A simple graphical model class for learning about, testing, and developing algorithms
 for graphical models.
 
-Version 0.2.0 (2024-04-01)
-Version 0.2.0 (2024-04-01)
+Version 0.3.0 (2025-03-31)
+Version 0.3.0 (2025-03-31)
 
 (c) 2015- Alexander Ihler under the FreeBSD license; see license.txt for details.
 """

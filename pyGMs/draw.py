@@ -1,6 +1,7 @@
 from .factor import *
+from .misc import *
 from .graphmodel import *
-
+import networkx as nx
 
 class nxDefaults:
   """Set networkx drawing default appearances for variable nodes, factor nodes, and edges"""
@@ -15,7 +16,7 @@ def nxMarkovGraph(model, all_vars=False):
     """Get networkx Graph object of the Markov graph of the model
 
     Example:
-    >>> G = nxMarkovGraph(model)
+    >>> G = gm.draw.nxMarkovGraph(model)
     >>> nx.draw(G)
     """
     import networkx as nx
@@ -42,7 +43,7 @@ def nxFactorGraph(model, all_vars=False):
     """Get a networkx Graph object of the factor graph of the model
 
     Example:
-    >>> G=gm.nxFactorGraph(model); nx.draw(G);
+    >>> G=gm.draw.nxFactorGraph(model); nx.draw(G);
     """
     import networkx as nx
     G = nx.Graph()
@@ -54,6 +55,27 @@ def nxFactorGraph(model, all_vars=False):
       for v in f.vars:
           G.add_edge(v.label,'f{:d}'.format(i))
     return G
+
+
+def nxBayesNet(model, all_vars=False):
+    """Get networkx DiGraph representation of a Bayes net graphical model
+
+    Example:
+    >>> G = gm.draw.nxBayesNet(model)
+    >>> nx.draw(G)
+    """
+    topo_order = bnOrder(model)                              # TODO: allow user-provided order?
+    if topo_order is None: raise ValueError('Topo order not found; model is not a Bayes Net?')
+    pri = np.zeros((max(topo_order)+1,))-1
+    pri[topo_order] = np.arange(len(topo_order))
+    G = nx.DiGraph()
+    G.add_nodes_from( [v.label for v in model.X if (all_vars or v.states > 1)] ) # all or non-trivial vars
+    for f in model.factors:
+      v2label = topo_order[ int(max(pri[v.label] for v in f.vars)) ]
+      for v1 in f.vars:
+        if (v1.label != v2label): G.add_edge(v1.label,v2label)
+    return G
+
 
 
 
@@ -68,15 +90,10 @@ def drawMarkovGraph(model,**kwargs):
     >>> gm.drawMarkovGraph(model, labels={0:'0', ... } )    # keyword args passed to networkx.draw()
     """
     # TODO: fix defaults; specify shape, size etc. consistent with FG version
-    import networkx as nx
     import copy
     kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
-    G = nx.Graph()
-    G.add_nodes_from( [v.label for v in model.X if v.states > 1] )  # only non-trivial vars
-    for f in model.factors:
-      for v1 in f.vars:
-        for v2 in f.vars:
-          if (v1 != v2): G.add_edge(v1.label,v2.label)
+    G = nxMarkovGraph(model)
+
     kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in G.nodes()})
     kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
     kwargs.pop('var_labels',None)   # remove artificial "var_labels" entry)
@@ -99,14 +116,11 @@ def drawFactorGraph2(model, voptions=None,foptions=None,eoptions=None, **kwargs)
     import networkx as nx
     import copy
     kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
-    G = nx.Graph()
-    vNodes = [v.label for v in model.X if v.states > 1]   # list only non-trivial variables
-    fNodes = [-i-1 for i in range(len(model.factors))]    # use negative IDs for factors: TODO switch to "fi"?
-    G.add_nodes_from( vNodes + fNodes )
-    for i,f in enumerate(model.factors):
-      for v in f.vars:
-        G.add_edge(v.label,-i-1)
-    #
+    G = nxFactorGraph(model)
+    vNodes = [n for n,d in G.nodes(data=True) if d['nodetype']=='var']
+    fNodes = [n for n,d in G.nodes(data=True) if d['nodetype']=='factor']
+
+
     # Get default appearances for vars; add default labels; override / augment with "voptions"
     vopt = copy.copy(nxDefaults.var); vopt['labels']=[v.label for v in model.X if v.states>1]
     for arg in voptions: vopt[arg] = voptions[arg]
@@ -117,7 +131,7 @@ def drawFactorGraph2(model, voptions=None,foptions=None,eoptions=None, **kwargs)
     eopt = copy.copy(nxDefaults.edge); 
     for arg in eoptions: eopt[arg] = eoptions[arg]
 
-    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
+    if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # need same positions multiple times...
 
     nx.draw_networkx_nodes(G, nodelist=vNodes,**vopt,**kwargs)
     nx.draw_networkx_nodes(G, nodelist=fNodes,**fopt,**kwargs)
@@ -145,14 +159,9 @@ def drawFactorGraph(model,var_color='w',factor_color=[(.2,.2,.8)],**kwargs):
     import networkx as nx
     import copy
     kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
-    G = nx.Graph()
-    vNodes = [v.label for v in model.X if v.states > 1]   # list only non-trivial variables
-    fNodes = [-i-1 for i in range(len(model.factors))]    # use negative IDs for factors: TODO switch to "fi"?
-    G.add_nodes_from( vNodes )
-    G.add_nodes_from( fNodes )
-    for i,f in enumerate(model.factors):
-      for v1 in f.vars:
-        G.add_edge(v1.label,-i-1)
+    G = nxFactorGraph(model)
+    vNodes = [n for n,d in G.nodes(data=True) if d['nodetype']=='var']
+    fNodes = [n for n,d in G.nodes(data=True) if d['nodetype']=='factor']
 
     if not 'pos' in kwargs: kwargs['pos'] = nx.spring_layout(G) # so we can use same positions multiple times...
     var_labels  = kwargs.get('var_labels',kwargs.get('labels', {n:n for n in vNodes}))
@@ -168,6 +177,10 @@ def drawFactorGraph(model,var_color='w',factor_color=[(.2,.2,.8)],**kwargs):
     return G
 
 
+#
+# TODO: "generic" draw function that discerns MRF,BN,FG,ID from nxNNN() function output?
+#
+
 
 def drawBayesNet(model,**kwargs):
     """Draw a Bayesian Network (directed acyclic graph) using networkx function calls
@@ -179,19 +192,9 @@ def drawBayesNet(model,**kwargs):
 
     >>> gm.drawBayesNet(model, labels={0:'0', ... } )    # keyword args passed to networkx.draw()
     """
-    import networkx as nx
     import copy
     kwargs = copy.copy(kwargs)    # make a copy of the arguments dict for mutation
-    topo_order = bnOrder(model)                              # TODO: allow user-provided order?
-    if topo_order is None: raise ValueError('Topo order not found; model is not a Bayes Net?')
-    pri = np.zeros((max(topo_order)+1,))-1
-    pri[topo_order] = np.arange(len(topo_order))
-    G = nx.DiGraph()
-    G.add_nodes_from( [v.label for v in model.X if v.states > 1] )  # only non-trivial vars
-    for f in model.factors:
-      v2label = topo_order[ int(max(pri[v.label] for v in f.vars)) ]
-      for v1 in f.vars:
-        if (v1.label != v2label): G.add_edge(v1.label,v2label)
+    G = nxBayesNet(model)
 
     kwargs['var_labels'] = kwargs.get('var_labels',{n:n for n in [v.label for v in model.X if v.states>1]})
     kwargs['labels'] = kwargs.get('labels', kwargs.get('var_labels',{}) )
@@ -257,6 +260,7 @@ def drawLimid(model, C,D,U, **kwargs):
 
 
 
+
 #### TODO: fix & test
 #def drawSearchTree(root):
 #    """G, pos = drawSearchTree(root) :  return nxGraph of a current search tree, and position information."""
@@ -281,31 +285,68 @@ def drawLimid(model, C,D,U, **kwargs):
 #    G.add_edges_from([(p,n) for ns in nodes[:-1] for p in ns for n in p.children])
 #    return G,pos
 
-def nxTreeLayout(G):
-    """pos = nxTreeLayout(G) :  return positions for root-down layout of a tree."""
-    depth = {}; by_depth = {}
-    for n in G.nodes: 
-        dn = n.count(',')+n.count('.')  # number of variables & number of values    
-        depth[n] = dn
-        by_depth[dn] = [n] if dn not in by_depth else by_depth[dn]+[n]
+# def nxTreeLayout(G):
+#     """pos = nxTreeLayout(G) :  return positions for root-down layout of a tree."""
+#     depth = {}; by_depth = {}
+#     for n in G.nodes: 
+#         dn = n.count(',')+n.count('.')  # number of variables & number of values    
+#         depth[n] = dn
+#         by_depth[dn] = [n] if dn not in by_depth else by_depth[dn]+[n]
+# 
+#     pos = {}
+#     leaves = sorted([n for n in G.nodes if len(G.out_edges(n))==0])
+#     max_depth = max(by_depth.keys());
+#     x = -1.
+#     for i,l in enumerate(leaves): 
+#         if i>0:
+#             x += 1. + np.log2(depth[l] - depth[nx.lowest_common_ancestor(G,l,leaves[i-1])])
+#         else: x += 1. + 0*np.log2(max_depth - depth[l]+1)
+#         pos[l] = (x,-depth[l]);
+#         
+#     for d in range(max_depth,-1,-1):
+#         if d not in by_depth: continue
+#         for n in by_depth[d]: 
+#             if n not in pos: pos[n] = (np.mean([pos[c[1]][0] for c in G.out_edges(n)]), -depth[n])
+#     return pos
+# 
+## TODO: nxTuneTreeLayout? Make tree layout look nicer?
 
-    pos = {}
-    leaves = sorted([n for n in G.nodes if len(G.out_edges(n))==0])
-    max_depth = max(by_depth.keys());
-    x = -1.
-    for i,l in enumerate(leaves): 
-        if i>0:
-            x += 1. + np.log2(depth[l] - depth[nx.lowest_common_ancestor(G,l,leaves[i-1])])
-        else: x += 1. + 0*np.log2(max_depth - depth[l]+1)
-        pos[l] = (x,-depth[l]);
-        
-    for d in range(max_depth,-1,-1):
-        if d not in by_depth: continue
-        for n in by_depth[d]: 
-            if n not in pos: pos[n] = (np.mean([pos[c[1]][0] for c in G.out_edges(n)]), -depth[n])
+def nxTreeLayout(G, pos=None):
+    """Lay out a directed tree
+      G (networkx.DiGraph) : directed graph; use G.reverse() if edges oriented toward root 
+      pos (dict[node:(x,y)], default None) : initial node locations to adjust
+    """
+    nodes = sorted(G.nodes)
+    roots = [n for n in G.nodes if G.in_degree[n]==0] 
+    if pos is None:
+      dists = tuple(d2t([nx.shortest_path_length(G, source=r)],nodes)[0] for r in roots)
+      dists = dists[0] if len(dists)==1 else np.fmin( *dists )
+      dists = t2d([dists],nodes)[0]
+      pos = {n:(0,dists[n]) for n in nodes}   # no info given? just place them at depth d
+    else: 
+      pos = pos.copy()
+   
+    def _revise(G, root, w=1., x=0.5, pos=None, par=None):
+        if type(root) is list: children = root
+        else:
+            pos[root] = (np.round(x,4), pos[root][1])
+            children = list(G.successors(root))
+        if len(children):
+            children = [n[1] for n in sorted([(pos[c],c) for c in children])]  # sort by current x-vals
+            dx = w/(len(children))
+            x_ = x - w/2 - dx/2
+            for ch in children:
+                x_ += dx
+                pos = _revise(G,ch, w=dx, x=x_, pos=pos, par=root)
+        return pos
+    pos = _revise(G,roots,pos=pos)
+
+    # Now revise x-positions more uniformly
+    xvals = np.unique([pos[p][0] for p in pos])
+    xmap = {x:i*1./len(xvals) for i,x in enumerate(xvals)}
+    for p in pos: pos[p]=(xmap[pos[p][0]],pos[p][1])
     return pos
 
-## TODO: nxTuneTreeLayout? Make tree layout look nicer?
 
 
 

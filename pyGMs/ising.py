@@ -4,7 +4,7 @@ ising.py
 Specialty graphical model class for Ising models (binary pairwise models)
 Note: uses data definition Xi in {0,1} for compatibility with other graphmodel classes
 
-Version 0.2.0 (2024-04-01)
+Version 0.3.0 (2025-03-31)
 (c) 2020 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
@@ -392,7 +392,7 @@ def refit_moments(model, data, alpha=1e-4, weights=None):
         pij = np.cov(data,ddof=0,aweights=weights) + (pi.T.dot(pi));
         return pij,pi[0]
         
-    n,m = data.shape
+    m,n = data.shape
     pij,pi = moments(data.T, weights)       # data should be 0/1, not -1/+1
     factors = [Factor([Var(i,2)], [1-pi[i],pi[i]]) for i in range(n)]
     L = coo(model.L)
@@ -418,7 +418,7 @@ def refit_ipf(model, data, maxiter=10, stoptol=1e-4, alpha=1e-4, weights=None):
        
     from pyGMs.wmb import JTree
     import random
-    n,m = data.shape
+    m,n = data.shape
     pij,pi = moments(data.T, weights)       # data should be 0/1, not -1/+1
     order = eliminationOrder(model, 'minwidth')[0];
     L = coo(model.L); edges = list([(int(i),int(j)) for i,j in zip(L.row,L.col) if i<j])
@@ -646,6 +646,15 @@ def fit_greedy(data, nnbr=10, threshold=0.05, refit=refit_pll):
     refit(model,data.T)
     return model
 
+
+
+# TODO: Independence-test based structure learning?  (Add more generally to GMs?)
+#  * PC algorithm e.g. https://github.com/py-why/causal-learn/blob/main/causallearn/utils/PCUtils/SkeletonDiscovery.py
+#  * IAMB and IAMBnPC (two-pass Markov blanket discovery)
+#  * ARACNE short-loop removal  
+#  * [historic interest?] Grow-Shrink (Margaritis & Thrun '99)
+#  * [historic interest?] Koller-Sahami (1996) 
+# *  
 
 def __Bethe(ising,R,mu,bel=None):
     if bel is None: bel = 1./(1+np.exp(-2.*(arr(mu.sum(0)).reshape(-1)+ising.h)))

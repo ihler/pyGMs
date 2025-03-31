@@ -97,6 +97,11 @@ class PrunedDFS(object):
 
         # Now move on to the next node in the queue
         self.node, self.cfg = self.__next(n) 
+
+  def graph(self, graph=None):
+    """Return graphviz graph of current search tree. If graph!=None, *add* any elements to existing graph."""
+    raise NotImplementedError('TODO: not yet implemented')
+    return None
         
 
 

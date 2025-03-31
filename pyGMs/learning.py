@@ -43,7 +43,10 @@ from itertools import permutations as perms
 # Score functions & complexity penalties
 #########################################
 
-def bic(p,m): return p*np.log(m)/2/m     # Bayesian Information complexity penalty (Schwarz et al 1978)
+def bic(p,m): 
+    """Bayesian Information complexity penalty (Schwarz et al 1978)
+      For *average* log-likelihood; p = # parameters, m = # data  (so, ~ p*log(m)/m )"""
+    return p*np.log(m)/2/m
 def aic(p,m): return None     # Aikike info criterion
 def qnml(args): return None   # Quotient normalized maximum likelihood (Silander et al 2018)
 
@@ -52,6 +55,7 @@ def bde(counts,i,alpha=1.):
     return _bdgeneral(counts,i,gm.Factor(counts.vars,alpha/counts.numel))
 
 def _bdgeneral(counts,i,alphas):
+    """Internal helper function for Bayesian Dirichlet equivalent score f'n"""
     from scipy.special import logggamma  # could use math.lgamma in Python 3.2+
     pseudocounts = counts + alphas
     result = gm.Factor(pseudocounts.vars, 0.)
@@ -81,7 +85,14 @@ def bnStructure(Data, **kwargs):
 
 
 def bnStructGivenOrder( Data, maxpa, order=None, alpha=1e-6, penalty=bic, saved_scores=None, verbose=False):
-    """Find best Bayes Net structure given variable order """
+    """Find best Bayes Net structure given a topological variable order. 
+      maxpa (int) : maximum number of parents to consider
+      order (list[int]) : topological order to enforce in the BN
+      alpha (float) : regularization for empirical probability estimates
+      penalty (function; default bic) : decomposable complexity penalty to include in score
+      saved_scores (dict[(x,xpa)]) : cached scores to avoid recomputation
+      verbose (bool) : display detailed search information
+    """
     m,n = Data.shape
     sz = Data.max(axis=0)+1   # largest state value in dataset
     X = [gm.Var(i, s) for i,s in enumerate(sz)]
@@ -141,6 +152,7 @@ print("Best score ",score)
 ###############################################
 
 def bnHillClimbing(*kwargs):
+    """Simple hill-climbing local search for Bayes net structure learning (Heckerman et al., 1995) """
     raise NotImplementedError("Hill climbing not yet implemented")
     # TODO: include stochastic local search?  pocket? annealed?
 

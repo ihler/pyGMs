@@ -3,7 +3,7 @@ graphmodel.py
 
 Defines a graphical model container class for reasoning about graphical models
 
-Version 0.2.0 (2024-04-01)
+Version 0.3.0 (2025-03-31)
 (c) 2015-2021 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
@@ -144,7 +144,7 @@ class GraphModel(object):
 
   def makePositive(self,eps=1e-8):
     """Force factors / model to be positive (non-zero)"""
-    if self.isLog(): eps = np.log(eps)
+    if self.isLog: eps = np.log(eps)
     for f in self.factors:
       f.table = np.maximum( f.table, eps )
 
@@ -155,7 +155,7 @@ class GraphModel(object):
     if not _is2D(x): x=[x]
     factors = self.factors if subset==None else self.factorsWithAny(subset)
     if self.isLog: return np.exp( np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1) )
-    else:          return np.product( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
+    else:          return np.prod( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
 
   def logValue(self,x,subset=None): 
     """Evaluate log F(x) = \\sum_r log f_r(x_r) for some (full) configuration x.

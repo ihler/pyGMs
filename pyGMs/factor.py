@@ -3,7 +3,7 @@ factor.py
 
 Defines variables, variable sets, and dense factors over discrete variables (tables) for graphical models
 
-Version 0.2.0 (2024-04-01)
+Version 0.3.0 (2025-03-31)
 (c) 2015-2021 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
