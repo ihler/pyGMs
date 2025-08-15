@@ -1,4 +1,5 @@
 notes.txt
+*.swp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -62,6 +63,9 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+#VSCode
+.vscode
 
 # Mac osX meta data
 .DS_Store

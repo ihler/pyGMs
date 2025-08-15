@@ -562,7 +562,7 @@ class Factor(object):
 
     'distance' can be any of:
        'L1'    : L1 or manhattan distance, sum of absolute values
-       'L2'    : L2 or Euclidean distance, sum of squares
+       'L2'    : Squared L2 or Euclidean distance: sum of squared differences
        'LInf'  : L-Infinity distance, maximum value
        'KL'    : Shannon entropy (KL = Kullback Leibler)
        'HPM'   : Hilbert's projective metric
@@ -572,9 +572,9 @@ class Factor(object):
     if   distance == 'l1':   tmp -= that; tmp.absIP(); return tmp.sum()
     elif distance == 'l2':   tmp -= that; tmp *= tmp;  return tmp.sum()
     elif distance == 'linf': tmp -= that; tmp.absIP(); return tmp.max()
-    elif distance == 'kl':   Z=tmp.sum(); tmp/=that; tmp*=that.sum()/Z; tmp.logIP(); tmp*=self; return tmp.sum()/Z;
+    elif distance == 'kl':   Z=tmp.sum(); tmp/=that; tmp*=that.sum()/Z; tmp.t[self.t==0]=1; tmp.logIP(); tmp*=self; return tmp.sum()/Z;
     elif distance == 'hpm':  tmp /= that; tmp.logIP(); return tmp.max() - tmp.min();
-    else: raise ValueError("Unrecognized norm type {}; 'L1','L2','LInf','KL','HPM'".format(distance));
+    else: raise ValueError(f"Unrecognized norm type '{distance}'; 'L1','L2','LInf','KL','HPM'");
     
     
 #useful things:

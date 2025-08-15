@@ -73,7 +73,7 @@ class WMB(object):
           weights: weighted elimination per bucket; see setWeights()
           attach : construct clique functions (True) or postpone until later (False)
         """
-        # TODO: check if model isLog() true
+        # TODO: check if model isLog() true  (save result for "originals"? or changes with model?)
         # save a reference to our model
         self.model = model
         self.X     = model.X
@@ -462,12 +462,13 @@ class WMB(object):
                 for c in mb.children: beliefs_b[j] += c.msgFwd
                 #beliefs_b[j] -= beliefs_b[j].lse()
                 #if mb.weight > 0:
-                beliefs_b[j] -= beliefs_b[j].max()
+                mx = beliefs_b[j].max()
+                beliefs_b[j] -= mx #beliefs_b[j].max()   # TODO: used to just remove mx? now included?
                 #else:
                 #    beliefs_b[j] -= beliefs_b[j].min()   # invert if negative? TODO?
                 beliefs_b[j] *= 1.0 / mb.weight
                 for c in mb.children:
-                    c.msgBwd = beliefs_b[j].lse( mb.clique - c.clique )*c.weight - c.msgFwd
+                    c.msgBwd = beliefs_b[j].lse( mb.clique - c.clique )*c.weight - c.msgFwd + mx*(c.weight/mb.weight)
                     #c.msgBwd -= c.msgBwd.max()   # TODO normalize for convenience?
                     #c.msgBwd = (beliefs_b[j]*(1.0/mb.weight)).lse( mb.clique - c.clique )*c.weight - c.msgFwd
                 for c in to_save[i]:
