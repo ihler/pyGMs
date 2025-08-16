@@ -3,8 +3,8 @@ factorSparse.py
 
 Defines sparse factors over discrete variables (tables) for graphical models
 
-Version 0.3.0 (2025-03-31)
-(c) 2019 Alexander Ihler under the FreeBSD license; see license.txt for details.
+Version 0.3.1 (2025-08-15)
+(c) 2019-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 import numpy as np
@@ -66,16 +66,19 @@ class FactorSparse(object):
     # TODO: add user-specified order method for values (order=)
     # TODO: accept out-of-order vars list  (=> permute vals as req'd)
     try:
-      self.v = VarSet(vars)                             # try building varset with args
+      vlist = [v for v in vars]
+      self.v = VarSet(vlist)                            # try building varset with args
     except TypeError:                                   # if not iterable (e.g. single variable)
-      self.v = VarSet()                                 #   try just adding it
-      self.v.add(vars)
+      vlist = [vars]
+      self.v = VarSet(vlist)                            #   try just adding it
     #assert( self.v.nrStates() > 0)
     #if self.v.nrStatesDouble() > 1e8: raise ValueError("Too big!");
 
+    if (vlist != sorted(vlist)):
+        raise ValueError('Please ensure variables are in sorted order.')
     self.t = {}
     if type(vals) is dict:
-      self.t = vals
+      self.t = vals.copy()
     elif not (type(vals) is float and vals==0.):
       try:	
         tmp_t = np.empty(self.v.dims(), float, orderMethod);
@@ -162,7 +165,8 @@ class FactorSparse(object):
   ################## METHODS ##########################################
   def __getitem__(self,loc):
     """Accessor: F[x1,x2] = F[sub2ind(x1,x2)] = F(X1=x1,X2=x2)"""
-    if isinstance(loc, tuple):  # lost "list" operation? 
+    if isinstance(loc, dict): return self.valueMap(loc)
+    if isinstance(loc, (tuple, list)):
       return self.t[loc]
     elif self.nvar < 2:
       return self.t[(loc,)]
@@ -174,7 +178,8 @@ class FactorSparse(object):
 
   def __setitem__(self,loc,val):
     """Assign values of the factor: F[i,j,k] = F[idx] = val if idx=sub2ind(i,j,k)"""
-    if isinstance(loc, tuple):  # lost "list" operation? 
+    if isinstance(loc, dict): return self.setValueMap(loc,val)
+    if isinstance(loc, (tuple, list)):
       self.t[loc] = val
     elif self.nvar < 2:
       self.t[(loc,)] = val
@@ -192,6 +197,10 @@ class FactorSparse(object):
     if self.nvar == 0: return self.t[0]          # if a scalar f'n, nothing to index
     return self.t[tuple(x[v] for v in self.v)]   # otherwise, find entry of table
 
+  def setValueMap(self,x,val):
+    """Set F[x[i],x[j]] = val, where i,j = F.vars, i.e, x is a map from variables to their state values"""
+    self.t[tuple(x[v] for v in self.v) if len(self.v) else 0] = val  # lookup location to set, or 0 if scalar f'n
+ 
   def __float__(self):
     """Convert factor F to scalar float if possible; otherwise raises ValueError"""
     if (self.nvar == 0): return self.t[0]
@@ -538,7 +547,7 @@ class FactorSparse(object):
 
     'distance' can be any of:
        'L1'    : L1 or manhattan distance, sum of absolute values
-       'L2'    : L2 or Euclidean distance, sum of squares
+       'L2'    : Squared L2 or Euclidean distance: sum of squared differences
        'LInf'  : L-Infinity distance, maximum value
        'KL'    : Shannon entropy (KL = Kullback Leibler)
        'HPM'   : Hilbert's projective metric
@@ -550,7 +559,7 @@ class FactorSparse(object):
     elif distance == 'linf': tmp -= that; tmp.absIP(); return tmp.max()
     elif distance == 'kl':   Z=tmp.sum(); tmp/=that; tmp*=that.sum()/Z; tmp.logIP(); tmp*=self; return tmp.sum()/Z;
     elif distance == 'hpm':  tmp /= that; tmp.logIP(); return tmp.max() - tmp.min();
-    else: raise ValueError("Unrecognized norm type {}; 'L1','L2','LInf','KL','HPM'".format(distance));
+    else: raise ValueError(f"Unrecognized norm type '{distance}'; 'L1','L2','LInf','KL','HPM'");
     
     
 #useful things:

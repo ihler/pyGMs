@@ -3,8 +3,8 @@ factor.py
 
 Defines variables, variable sets, and dense factors over discrete variables (tables) for graphical models
 
-Version 0.3.0 (2025-03-31)
-(c) 2015-2021 Alexander Ihler under the FreeBSD license; see license.txt for details.
+Version 0.3.1 (2025-08-15)
+(c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 import numpy as np
@@ -69,20 +69,26 @@ class Factor(object):
     [vals] should be a correctly sized numpy array, or something that can be cast to the same.
     """
     # TODO: add user-specified order method for values (order=)
-    # TODO: accept out-of-order vars list  (=> permute vals as req'd)
+    # DONE? accept out-of-order vars list  (=> permute vals as req'd)
     try:
-      self.v = VarSet(vars)                             # try building varset with args
+      vlist = [v for v in vars]
+      self.v = VarSet(vlist)                            # try building varset with args
     except TypeError:                                   # if not iterable (e.g. single variable)
-      self.v = VarSet()                                 #   try just adding it
-      self.v.add(vars)
+      vlist = [vars]
+      self.v = VarSet(vlist)                            #   try just adding it
     #assert( self.v.nrStates() > 0)
     #if self.v.nrStatesDouble() > 1e8: raise ValueError("Too big!");
 
+    vlistdims = tuple(v.states for v in vlist) if len(vlist) else (1,)
     try: 
-      self.t = np.empty(self.v.dims(), float, orderMethod);
+      #self.t = np.empty(self.v.dims(), float, orderMethod);
+      self.t = np.empty(vlistdims, float, orderMethod);
       self.t[:] = vals                                  # try filling factor with "vals"
     except ValueError:                                  # if it's an incompatible shape,
-      self.t = np.reshape(np.array(vals, float), self.v.dims(), orderMethod)  # try again using reshape
+      self.t = np.reshape(np.array(vals, float), vlistdims, orderMethod)  # try again using reshape
+    if vlist != sorted(vlist):
+      newOrder = tuple(map(lambda x:vlist.index(x), self.v))
+      self.t = self.t.transpose(newOrder)
 
   def __build(self,vs,ndarray):
     """Internal build function from numpy ndarray"""

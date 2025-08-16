@@ -372,7 +372,7 @@ class testGraphModel(unittest.TestCase):
     #print bel[tuple(res.vars)].table
     #print res.table
     self.assertTrue( eq_tol( bel[res.vars], res, tol) )
-    lnP,xdraw = jt.sample()    # draw a sample and check its probability under the model
+    xdraw,lnP = jt.sample()    # draw a sample and check its probability under the model
     self.assertTrue( abs(lnP + -20.477081 - model.logValue(xdraw)) < tol ) 
     
     jt = JTree(model,ord,weights=1e-6)

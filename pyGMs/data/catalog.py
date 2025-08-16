@@ -1,3 +1,14 @@
+"""
+catalog.py
+
+Defines Models (uai-file oriented problem instances) and Catalogs (collections of Models)
+along with a just-in-time mechanism for downloading model files from a repository.
+
+Version 0.3.1 (2025-08-15)
+(c) 2015-2025 AlexanderIhler under the FreeBSD license; see license.txt for details.
+"""
+
+
 import tempfile
 import json
 
@@ -122,22 +133,22 @@ class Catalog(object):
       """Update list of modelset packages from known repositories. Specify 'path' to override current cache location."""
       if path is None: path = self.cache
       all_modelsets = {}
-      print('Updating cache index from sources:')
+      if self.verbose: print('Initializing cache index from sources:')
       for url in self.sources:
         try:
-          print(f'  {url}: ',end='')
+          if self.verbose: print(f'  {url}: ',end='')
           src_data = get_urldata(url, verbose=False)
           src_models = json.loads(src_data)
         except:
-          print(f' failed; skipping!')
+          if self.verbose: print(f' failed; skipping!')
           continue
-        print(f'done!')
+        if self.verbose: print(f'done!')
         all_modelsets.update( src_models )
       try:
         with open(self.__incache(__CATALOG_FILENAME__),'w') as fh:
           json.dump(all_modelsets,fh,indent=4)
       except:
-        print('Unable to write model catalog! Please check cache directory permissions.')
+        warnings.warn('Unable to write model catalog! Please check cache directory permissions.')
 
     def __incache(self,*args):
         """Join the function arguments with the cache location to provide an absolute path"""
@@ -184,7 +195,7 @@ class Catalog(object):
                 except: pass
             if len(sets):
                 with open(self.__incache(__CATALOG_FILENAME__),'wb') as fh: json.dump(sets,fh,indent=4)
-            if key not in sets: raise ValueError('Set {key} not found at URLs {self.sources}')
+            if key not in sets: raise ValueError(f'Set {key} not found at URLs {self.sources}')
 
         os.makedirs(self.__incache(key), exist_ok=True)
         next_url = sets[key]['modelset']

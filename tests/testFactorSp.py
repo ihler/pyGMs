@@ -59,11 +59,11 @@ class testFactor(unittest.TestCase):
 		self.assertEqual(F2.numel() , 3*2 )
 		self.assertEqual(F2.vars , VarSet([x[1],x[2]]))
 
-		F3 = Factor( [x[2],x[1]] , 2.0 )
-		self.assertEqual(F3.nvar , 2, msg='{} should be 2'.format(F3.nvar))
-		self.assertEqual(F3.dims() , (3,2))
-		self.assertEqual(F3.numel() , 3*2 )
-		self.assertEqual(F3.vars , VarSet([x[1],x[2]]))
+		#F3 = Factor( [x[2],x[1]] , 2.0 )
+		#self.assertEqual(F3.nvar , 2, msg='{} should be 2'.format(F3.nvar))
+		#self.assertEqual(F3.dims() , (3,2))
+		#self.assertEqual(F3.numel() , 3*2 )
+		#self.assertEqual(F3.vars , VarSet([x[1],x[2]]))
 
 		F4 = Factor( x[1] , [0.15,0.75,.1] )
 		self.assertEqual(F4.nvar , 1, msg='{} should be 1'.format(F4.nvar))
