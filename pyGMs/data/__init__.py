@@ -1,4 +1,12 @@
-## Initialization for uai_models wrapper
+"""
+pyGMs.data: Python Graphical Model code, Data submodule
+
+pyGMs submodule for maintaining catalogs of problem instances and downloading them when accessed
+
+Version 0.3.1 (2025-08-15)
+
+(c) 2015-2025 AlexanderIhler under the FreeBSD license; see license.txt for details.
+"""
 
 import os, sys
 import warnings

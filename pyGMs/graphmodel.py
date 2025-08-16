@@ -3,8 +3,8 @@ graphmodel.py
 
 Defines a graphical model container class for reasoning about graphical models
 
-Version 0.3.0 (2025-03-31)
-(c) 2015-2021 Alexander Ihler under the FreeBSD license; see license.txt for details.
+Version 0.3.1 (2025-08-15)
+(c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 import operator as operator
