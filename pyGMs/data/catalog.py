@@ -4,7 +4,7 @@ catalog.py
 Defines Models (uai-file oriented problem instances) and Catalogs (collections of Models)
 along with a just-in-time mechanism for downloading model files from a repository.
 
-Version 0.3.2 (2025-09-05)
+Version 0.3.3 (2025-09-05)
 (c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
