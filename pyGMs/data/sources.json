@@ -1,6 +1,6 @@
 {
-  "sli": {
-    "name": "SLI",
+  "uci": {
+    "name": "UCI",
     "description": "Collections of past UAI competition models at UC Irvine",
     "url": "https://ics.uci.edu/~ihler/uai-data/index.json", 
     "types": ["uai"]

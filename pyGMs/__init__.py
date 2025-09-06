@@ -4,7 +4,7 @@ pyGMs: Python Graphical Model code
 A simple graphical model class for learning about, testing, and developing algorithms
 for graphical models.
 
-Version 0.3.1 (2025-08-15)
+Version 0.3.2 (2025-09-05)
 
 (c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
@@ -21,7 +21,7 @@ from .draw import *
 
 
 __title__ = 'pyGMs'
-__version__ = '0.3.1'
+__version__ = '0.3.2'
 __author__ = 'Alexander Ihler'
 __license__ = 'BSD'
 __copyright__ = '2015-2025, Alexander Ihler'

@@ -8,7 +8,7 @@ readEvidence10, readEvidence14  : read/write UAI, Ergo evidence formats (14: sin
 readErgo                        : read Ergo Bayes Net format
 readWCSP /  writeWCSP           : read/write WCSP weighted CSP format
 
-Version 0.3.1 (2025-08-15)
+Version 0.3.2 (2025-09-05)
 (c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 

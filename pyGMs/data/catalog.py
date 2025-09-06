@@ -4,13 +4,14 @@ catalog.py
 Defines Models (uai-file oriented problem instances) and Catalogs (collections of Models)
 along with a just-in-time mechanism for downloading model files from a repository.
 
-Version 0.3.1 (2025-08-15)
-(c) 2015-2025 AlexanderIhler under the FreeBSD license; see license.txt for details.
+Version 0.3.2 (2025-09-05)
+(c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 
 import tempfile
 import json
+import numpy as np
 
 import os
 import sys
@@ -177,9 +178,9 @@ class Catalog(object):
             ## Load stats file into indexable structure
             try:
                 info = stats.set_index('name').loc[key] 
-                return Model(self.cache, self.sources[0], **dict(info))
+                return Model(os.path.join(self.cache,self.path), self.sources[0], **dict(info))
             except:
-                raise ValueError('Model {key} not found in statistics file!')
+                raise ValueError(f'Model {key} not found in statistics file!')
         elif os.path.exists( self.__incache(__CATALOG_FILENAME__) ):
             ## Already cached catalog file (models or modelsets); load and check
             with open(self.__incache(__CATALOG_FILENAME__)) as fh: 
@@ -189,7 +190,7 @@ class Catalog(object):
             sets = {}
             for url in self.sources:
                 try:
-                    if not url[-len(__CATALOG_FILENAME__):]==__CATALOG_FILENAME: url=os.path.join(url,__CATALOG_FILENAME__)
+                    if not url[-len(__CATALOG_FILENAME__):]==__CATALOG_FILENAME__: url=os.path.join(url,__CATALOG_FILENAME__)
                     urldata = get_urldata(url, verbose=self.verbose)
                     sets.update( json.loads(urldata) )
                 except: pass
@@ -217,7 +218,7 @@ class Catalog(object):
             sets = {}
             for url in self.sources:
                 try:
-                    if not url[-len(__CATALOG_FILENAME__):]==__CATALOG_FILENAME: url=os.path.join(url,__CATALOG_FILENAME__)
+                    if not url[-len(__CATALOG_FILENAME__):]==__CATALOG_FILENAME__: url=os.path.join(url,__CATALOG_FILENAME__)
                     urldata = get_urldata(url, verbose=self.verbose)
                     sets.update( json.loads(urldata) )
                 except: pass
