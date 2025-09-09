@@ -34,9 +34,11 @@ class Var(object):
   def __hash__(self):
     return hash(self.label)
   def __int__(self):
-    return self.label
+    return int(self.label)
   def __index__(self):
     return self.label
+  def __reduce__(self):
+    return (self.__class__, (self.label,self.states))
 
 class VarSet(sset):
   " ""Container for (sorted) set of variables; the arguments to a factor "" "
@@ -68,9 +70,14 @@ class VarSet(sset):
     return [v.label for v in self]
   def expand_dims(self, *iterables):
     return tuple( tuple(map(lambda x:x.states if x in that else 1, self)) for that in iterables);
-     #dA = tuple(map(lambda x:x.states if  x in A.v else 1 ,vall));
+    #dA = tuple(map(lambda x:x.states if  x in A.v else 1 ,vall));
     #dB = tuple(map(lambda x:x.states if  x in B.v else 1 ,vall));
-
     #return np.ravel_multi_index(sub,self.dims(),order=orderMethod)  
-  # todo: needs set equality comparison?  (inherited from sset?)
+
+  # Use set comparisons inherited from sortedset; attempt to convert if possible (e.g. lists)
+  def __eq__(self, other): return super().__eq__(other if isinstance(other,VarSet) else VarSet(other))
+  def __lt__(self, other): return super().__lt__(other if isinstance(other,VarSet) else VarSet(other))
+  def __le__(self, other): return super().__le__(other if isinstance(other,VarSet) else VarSet(other))
+  def __gt__(self, other): return super().__gt__(other if isinstance(other,VarSet) else VarSet(other))
+  def __ge__(self, other): return super().__ge__(other if isinstance(other,VarSet) else VarSet(other))
 

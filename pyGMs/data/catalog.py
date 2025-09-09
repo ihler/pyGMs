@@ -4,7 +4,7 @@ catalog.py
 Defines Models (uai-file oriented problem instances) and Catalogs (collections of Models)
 along with a just-in-time mechanism for downloading model files from a repository.
 
-Version 0.3.3 (2025-09-05)
+Version 0.3.4 (2025-09-09)
 (c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
@@ -79,7 +79,7 @@ class Model(object):
         filepath = self.__lazyget(self.evidencefile)
         evid = np.loadtxt(filepath).flatten().astype(int)
         if len(evid)!=2*evid[0]+1: raise ValueError(f'Error / unknown format in {self.evidencefile}')
-        self.__evidence__ = {i:x for i,x in zip(evid[1::2],evid[2::2])}
+        self.__evidence__ = {int(i):int(x) for i,x in zip(evid[1::2],evid[2::2])}
     return self.__evidence__.copy()
 
   @property
@@ -88,7 +88,7 @@ class Model(object):
       filepath = self.__lazyget(self.orderfile)
       order = np.loadtxt(filepath).astype(int).flatten()
       if len(order)!=order[0]+1: raise ValueError(f'Error / unknown format in {self.orderfile}')
-      self.__order__ = tuple(order[1:])
+      self.__order__ = tuple(int(i) for i in order[1:])
     return self.__order__
 
   def get(self):
@@ -168,7 +168,7 @@ class Catalog(object):
         next_url = None
         if os.path.exists( self.__incache(__CATALOG_FILENAME__) ):
             with open(self.__incache(__CATALOG_FILENAME__)) as fh: sets = json.load(fh)
-            if key in sets: next_url = os.path.dirname(sets[key]['modelset'])
+            if key in sets: next_url = sets[key]['modelset']
         ## If already-cached subdirectory, just move down to that level
         if os.path.isdir( self.__incache(key) ):
             return Catalog( self.cache, os.path.join(self.path,key), next_url)
@@ -178,7 +178,7 @@ class Catalog(object):
             ## Load stats file into indexable structure
             try:
                 info = stats.set_index('name').loc[key] 
-                return Model(os.path.join(self.cache,self.path), self.sources[0], **dict(info))
+                return Model(os.path.join(self.cache,self.path), os.path.dirname(self.sources[0]), **dict(info))
             except:
                 raise ValueError(f'Model {key} not found in statistics file!')
         elif os.path.exists( self.__incache(__CATALOG_FILENAME__) ):

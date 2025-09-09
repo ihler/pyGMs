@@ -3,7 +3,7 @@ pyGMs.data: Python Graphical Model code, Data submodule
 
 pyGMs submodule for maintaining catalogs of problem instances and downloading them when accessed
 
-Version 0.3.3 (2025-09-05)
+Version 0.3.4 (2025-09-09)
 
 (c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """

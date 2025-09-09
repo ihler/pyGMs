@@ -3,7 +3,7 @@ factorSparse.py
 
 Defines sparse factors over discrete variables (tables) for graphical models
 
-Version 0.3.3 (2025-09-05)
+Version 0.3.4 (2025-09-09)
 (c) 2019-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
