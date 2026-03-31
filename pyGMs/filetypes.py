@@ -297,7 +297,7 @@ def readErgo(filename):
   cliques = [ None ] * nCliques
   for c in range(nCliques):         #   and their variables / scopes
     cSize = int(next(gen))           #   (number of parents)
-    cliques[c] = [int(next(gen))-1 for i in range(cSize)]+[c] # (clique is Xc + parents; use 0-based indexing)
+    cliques[c] = [int(next(gen)) for i in range(cSize)]+[c] # (clique is Xc + parents; already 0-based indexing?)
   factors = [ None ] * nCliques
   for c in range(nCliques):         # now read in the conditional probabilities
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
