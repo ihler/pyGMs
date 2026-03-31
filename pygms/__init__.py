@@ -4,7 +4,7 @@ pygms: Python Graphical Model code
 A simple graphical model class for learning about, testing, and developing algorithms
 for graphical models.
 
-Version 0.4.0 (2026-03-31)
+Version 0.4.1 (2026-03-31)
 
 (c) 2015-2026 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
@@ -20,7 +20,7 @@ from .draw import *
 
 
 __title__ = 'pygms'
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 __author__ = 'Alexander Ihler'
 __license__ = 'BSD'
 __copyright__ = '2015-2026, Alexander Ihler'

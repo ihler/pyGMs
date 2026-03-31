@@ -3,7 +3,7 @@ factorGauss.py
 
 Defines variables, variable sets, and factors over jointly Gaussian variables for graphical models
 
-Version 0.4.0 (2026-03-31)
+Version 0.4.1 (2026-03-31)
 (c) 2015-2026 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 

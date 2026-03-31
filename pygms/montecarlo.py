@@ -3,7 +3,7 @@ montecarlo.py
 
 Defines several Monte Carlo and MCMC routines for approximate inference in graphical models
 
-Version 0.4.0 (2026-03-31)
+Version 0.4.1 (2026-03-31)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
