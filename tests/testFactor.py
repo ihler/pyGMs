@@ -1,7 +1,7 @@
 """
 testFactor.py
 
-Unit tests for pyGMs factor class
+Unit tests for pygms factor class
 
 Version 0.1.1 (2022-04-06)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -10,9 +10,9 @@ Version 0.1.1 (2022-04-06)
 import unittest
 import numpy as np
 import sys
-sys.path.insert(0,'../')  # Use local version of pyGMs for testing
-import pyGMs
-from pyGMs import *
+sys.path.insert(0,'../')  # Use local version of pygms for testing
+import pygms
+from pygms import *
 
 def eq_tol(F,G,tolerance):
     if (F.nvar != G.nvar) or (F.vars != G.vars):

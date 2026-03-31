@@ -1,7 +1,7 @@
 """
 testFactor.py
 
-Unit tests for pyGMs factor class
+Unit tests for pygms factor class
 
 Version 0.1.1 (2022-04-06)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -15,8 +15,8 @@ sys.path.insert(0,'../')
 import os
 os.environ["PYGMS_USE_TORCH"] = "1"
 
-from pyGMs import *
-#from pyGMs.factorTorch import Factor
+from pygms import *
+#from pygms.factorTorch import Factor
 
 def eq_tol(F,G,tolerance):
     if (F.nvar != G.nvar) or (F.vars != G.vars):

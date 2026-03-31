@@ -3,7 +3,7 @@
 """
 testMisc.py
 
-Unit tests for additional pyGMs functions
+Unit tests for additional pygms functions
 
 Version 0.1.1 (2022-04-06)
 (c) 2015-2021 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -13,7 +13,7 @@ import unittest
 import numpy as np
 import sys
 sys.path.insert(0,'..')
-import pyGMs as gm
+import pygms as gm
 print(gm)
 
 def eq_tol(F,G,tolerance):

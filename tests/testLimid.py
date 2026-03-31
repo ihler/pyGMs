@@ -1,7 +1,7 @@
 """
 testLimid.py
 
-Unit tests for pyGMs decision models / influence diagrams
+Unit tests for pygms decision models / influence diagrams
 
 Version 0.1.1 (2022-04-06)
 (c) 2015- Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -11,9 +11,9 @@ import unittest
 import numpy as np
 import sys
 sys.path.insert(0,'../')
-import pyGMs as gm
+import pygms as gm
 print(gm)
-from pyGMs import *
+from pygms import *
 
 def eq_tol(F,G,tolerance):
   if (F.nvar != G.nvar) or (F.vars != G.vars):
@@ -95,7 +95,7 @@ class testLimid(unittest.TestCase):
     return
 
   def testEUFactor(self):
-    from pyGMs.decisions import euFactor
+    from pygms.decisions import euFactor
     C,D,U = Wildcatter()
 
     factors = [euFactor(prob=f) for f in C] + \
@@ -112,7 +112,7 @@ class testLimid(unittest.TestCase):
 
 
   def testValuation2(self):
-    from pyGMs.decisions import euFactor
+    from pygms.decisions import euFactor
     C,D,U = Pigs(False)
     
     factors = [euFactor(prob=f) for f in C] + \

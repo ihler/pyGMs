@@ -1,7 +1,7 @@
 """
 testIsing.py
 
-Unit tests for pyGMs Ising class (specialty Ising / Boltzmann models)
+Unit tests for pygms Ising class (specialty Ising / Boltzmann models)
 
 Version 0.1.1 (2022-04-06)
 (c) 2021- Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -14,9 +14,9 @@ import unittest
 import numpy as np
 import sys
 sys.path.insert(0,'../')
-import pyGMs as gm
+import pygms as gm
 print(gm)
-import pyGMs.ising
+import pygms.ising
 
 import matplotlib
 import matplotlib.pyplot as plt

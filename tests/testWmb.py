@@ -1,7 +1,7 @@
 """
 testGraphModel.py
 
-Unit tests for pyGMs graphmodel class
+Unit tests for pygms graphmodel class
 
 Version 0.1.1 (2022-04-06)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -11,10 +11,10 @@ import unittest
 import numpy as np
 import sys
 sys.path.insert(0,'../')
-import pyGMs as gm
+import pygms as gm
 print(gm)
-from pyGMs import *
-import pyGMs.wmb as wmb
+from pygms import *
+import pygms.wmb as wmb
 
 
 def eq_tol(F,G,tolerance):

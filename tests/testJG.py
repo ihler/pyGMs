@@ -8,7 +8,7 @@ import numpy as np
 np.random.seed(0)
 import sys
 sys.path.insert(0,'../')
-import pyGMs as gm
+import pygms as gm
 print(gm)
 
 N = 12
@@ -29,7 +29,7 @@ for i in range(N):
 #model.eliminate( X, sumElim )
 #print np.log( model.joint().table )
 
-import pyGMs.wmb
+import pygms.wmb
 model = gm.GraphModel(fs)
 jt = gm.wmb.JTree( model , X)
 

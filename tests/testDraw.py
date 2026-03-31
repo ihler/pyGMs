@@ -1,7 +1,7 @@
 
 
 import numpy as np
-import pyGMs as gm
+import pygms as gm
 import matplotlib.pyplot as plt   # use matplotlib for plotting with inline plots
 import networkx as nx
 

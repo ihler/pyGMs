@@ -1,7 +1,7 @@
 """
 testFactor.py
 
-Unit tests for pyGMs factor class
+Unit tests for pygms factor class
 
 Version 0.1.1 (2022-04-06)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 import sys
 sys.path.append('../../')
-from pyGMs.factorSparse import *
+from pygms.factorSparse import *
 
 Factor = FactorSparse
 
