@@ -8,8 +8,8 @@ readEvidence10, readEvidence14  : read/write UAI, Ergo evidence formats (14: sin
 readErgo                        : read Ergo Bayes Net format
 readWCSP /  writeWCSP           : read/write WCSP weighted CSP format
 
-Version 0.3.4 (2025-09-09)
-(c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
+Version 0.4.0 (2026-03-31)
+(c) 2015-2026 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
 import numpy as np;

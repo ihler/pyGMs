@@ -5,7 +5,7 @@ with open("readme.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name='pyGMs',
-    version='0.3.4',
+    version='0.4.0',
     author='Alexander Ihler',
     author_email='ihler@ics.uci.edu',
     description='Python Graphical Models Toolbox',
