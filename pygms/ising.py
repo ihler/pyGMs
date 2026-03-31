@@ -13,8 +13,8 @@ import numpy as np
 
 inf = float('inf')
 
-from pyGMs.factor import *
-from pyGMs.graphmodel import *
+from pygms.factor import *
+from pygms.graphmodel import *
 
 
 from scipy.sparse import coo_matrix as coo
@@ -416,7 +416,7 @@ def refit_ipf(model, data, maxiter=10, stoptol=1e-4, alpha=1e-4, weights=None):
         pij = np.cov(data,ddof=0,aweights=weights) + (pi.T.dot(pi));
         return pij,pi[0]
        
-    from pyGMs.wmb import JTree
+    from pygms.wmb import JTree
     import random
     m,n = data.shape
     pij,pi = moments(data.T, weights)       # data should be 0/1, not -1/+1

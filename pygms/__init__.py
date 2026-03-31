@@ -1,5 +1,5 @@
 """
-pyGMs: Python Graphical Model code
+pygms: Python Graphical Model code
 
 A simple graphical model class for learning about, testing, and developing algorithms
 for graphical models.

@@ -1,6 +1,6 @@
 #from constants import *
 # from sortedcontainers import SortedSet;
-from pyGMs.factor import Factor
+from pygms.factor import Factor
 import numpy as np
 
 ZERO = 0

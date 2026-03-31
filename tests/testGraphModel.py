@@ -7,8 +7,8 @@ Version 0.1.1 (2022-04-06)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
-import os
-os.environ["PYGMS_USE_TORCH"] = "1"
+#import os
+#os.environ["PYGMS_USE_TORCH"] = "1"
 
 import unittest
 import numpy as np

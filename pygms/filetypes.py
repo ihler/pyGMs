@@ -1,5 +1,5 @@
 """
-pyGMs/filetypes.py
+pygms/filetypes.py
 
 Read / write methods for graphical model file types (UAI, WCSP, etc.)
 
@@ -14,13 +14,13 @@ Version 0.4.0 (2026-03-31)
 
 import numpy as np;
 from sortedcontainers import SortedSet as sset;
-from pyGMs.factor import *
+from pygms.factor import *
 from builtins import range
 
 
 
 def readFileByTokens(file, specials=[], escape=True):
-  """Helper function for parsing pyGMs file formats
+  """Helper function for parsing pygms file formats
     specials : list of tokens to split on (in addition to whitespace, '\s')
     escape   : escape any specials; if False, interpret specials directly as regular expressions
   """
@@ -64,7 +64,7 @@ def stripComments(gen, start=['/*'],end=['*/']):
 # Temporary functions for testing file parse speed, etc.
 ################################################################################################
 def readFileByTokensNEW(path, specials=[]):
-  """Helper function for parsing pyGMs file formats"""
+  """Helper function for parsing pygms file formats"""
   with open(path,'r') as fp:
     tok0 = fp.readline()
     yield tok0

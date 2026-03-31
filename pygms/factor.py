@@ -9,7 +9,7 @@ Version 0.4.0 (2026-03-31)
 
 import os
 if os.environ.get("PYGMS_USE_TORCH") == "1":
-  from pyGMs.factorTorch import *
+  from pygms.factorTorch import *
 else:
-  from pyGMs.factorNumpy import *
+  from pygms.factorNumpy import *
 

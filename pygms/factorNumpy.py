@@ -13,10 +13,10 @@ from sortedcontainers import SortedSet as sset
 
 ## Under testing: cython-compiled variable sets for faster operations
 try:
-  from pyGMs.varset_c import Var,VarSet
+  from pygms.varset_c import Var,VarSet
 except ImportError:
   #print "Compiled version not loaded; importing python version"
-  from pyGMs.varset_py import Var,VarSet    # sortedcontainers version
+  from pygms.varset_py import Var,VarSet    # sortedcontainers version
   #from .varset_py2 import Var,VarSet  # numpy array version
 
 

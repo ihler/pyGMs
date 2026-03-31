@@ -14,8 +14,8 @@ from sortedcontainers import SortedSet;
 from builtins import range
 from functools import reduce
 
-from pyGMs.factor import *
-from pyGMs.graphmodel import *
+from pygms.factor import *
+from pygms.graphmodel import *
 
 
 ####### Basic sampling #########################

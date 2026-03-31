@@ -14,7 +14,7 @@ from sortedcontainers import SortedListWithKey;
 
 inf = float('inf')
 
-from pyGMs.factor import *
+from pygms.factor import *
 
 
 def _is2D(D):

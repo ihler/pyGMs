@@ -263,7 +263,7 @@ def random3SAT(alpha,n):
     '''Create a random 3-SAT problem in CNF form
       alpha : float : ratio of variables to clauses
       n     : int   : number of variables
-      Returns a list of pyGMs Factors corresponding to each clause.
+      Returns a list of pygms Factors corresponding to each clause.
     '''
     import random
     p = int(round(alpha*n))
