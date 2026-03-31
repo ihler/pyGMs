@@ -9,7 +9,6 @@ Version 0.3.4 (2025-09-09)
 (c) 2015-2025 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
-import numpy as np;
 from sortedcontainers import SortedSet as sset;
 
 from .factor import *

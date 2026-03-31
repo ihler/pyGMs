@@ -1,9 +1,15 @@
+
+
+#import os
+#os.environ["PYGMS_USE_TORCH"] = "1"
+
 import time
 import numpy as np
 np.random.seed(0)
 import sys
-sys.path.append('../../')
+sys.path.insert(0,'../')
 import pyGMs as gm
+print(gm)
 
 N = 12
 X = [gm.Var(i,2) for i in range(N**2)];

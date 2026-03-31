@@ -3,6 +3,7 @@ Pure python implementation of variables ("id" and state size) and variable sets 
 
 """
 
+import traceback
 import numpy as np
 from sortedcontainers import SortedSet as sset;
 from functools import reduce
@@ -40,6 +41,7 @@ class Var(object):
   def __reduce__(self):
     return (self.__class__, (self.label,self.states))
 
+
 class VarSet(sset):
   " ""Container for (sorted) set of variables; the arguments to a factor "" "
   # TODO: switch to np.array1D pair (ids, states)  (int/uint,uint)?
@@ -59,6 +61,7 @@ class VarSet(sset):
   def __str__(self):
     return "{"+','.join(map(str,self))+'}'
   def ind2sub(self,idx):
+    ##if type(idx) != int: raise ValueError(f"What's up with {type(idx)} => {idx}?");
     return np.unravel_index(idx,self.dims())  
     #return np.unravel_index(idx,self.dims(),order=orderMethod)  
   def sub2ind(self,sub):

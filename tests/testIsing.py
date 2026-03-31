@@ -7,11 +7,15 @@ Version 0.1.1 (2022-04-06)
 (c) 2021- Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
+#import os
+#os.environ["PYGMS_USE_TORCH"] = "1"
+
 import unittest
 import numpy as np
 import sys
-sys.path.append('../../')
+sys.path.insert(0,'../')
 import pyGMs as gm
+print(gm)
 import pyGMs.ising
 
 import matplotlib

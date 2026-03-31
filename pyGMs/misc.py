@@ -194,9 +194,9 @@ def loglikelihood(model, data, logZ=None):
     if logZ is None: 
         tmp = GraphModel(model.factors)  # copy the graphical model and do VE
         tmp.eliminate( eliminationOrder(model,'wtminfill')[0] , 'sum' )
-        logZ = tmp.logValue([])
+        logZ = tmp.logValue([])[0]
     #LL = model.logValue(data) - logZ
-    LL = np.array([model.logValue(d) for d in data]) - logZ
+    LL = [model.logValue(d)[0]-logZ for d in data]
     return LL
 
 
@@ -209,14 +209,14 @@ def pseudologlikelihood(model, data):
     def conditional(factor,i,x):   # helper function to compute conditional slice of a factor
         return factor.t[tuple(x[v] if v!=i else slice(v.states) for v in factor.vars)]
 
-    PLL = np.zeros( data.shape )
-    for i in range(data.shape[1]):  # for each variable:
+    PLL = [0.]*len(data)  #np.zeros( data.shape )
+    for i in range(len(data[0])):  #  data.shape[1]):  # for each variable:
         flist = model.factorsWith(i, copy=False)
-        for s in range(data.shape[0]):
+        for s in range(len(PLL)): #data.shape[0]):
             pXi = 1.
-            for f in flist: pXi *= conditional(f,i,data[s,:])
-            PLL[s,i] = np.log( pXi[data[s,i]]/pXi.sum() );
-    return PLL.sum(1);
+            for f in flist: pXi = pXi * conditional(f,i,data[s])
+            PLL[s] = PLL[s] + (pXi[data[s][i]]/pXi.sum()).log();
+    return PLL  #.sum(1);
 
 
 ##################################################

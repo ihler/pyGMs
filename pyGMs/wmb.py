@@ -227,10 +227,10 @@ class WMB(object):
                     n.children.extend(mb.children) #   merge with current child list
                     n.weight += mb.weight          # join weights into new node
                     if mb.parent is not None:      # if mb has a parent, shift factors around to preserve bound
-                        mb.theta -= mb.msgFwd
-                        mb.parent.theta += mb.msgFwd
+                        mb.theta = mb.theta - mb.msgFwd   ## was inplace
+                        mb.parent.theta = mb.parent.theta + mb.msgFwd  ## was inplace
                         mb.parent.children.remove(mb)
-                    n.theta += mb.theta                # join log-factors into new node
+                    n.theta = n.theta + mb.theta                # join log-factors into new node  ## was inplace
                     n.originals.extend(mb.originals)   # move original factor pointers to new node
                     b.remove(mb)
                 #n.theta += Factor(n.clique,0.0);  # need to do this at some point to ensure correct elim
@@ -643,17 +643,17 @@ class WMB(object):
             qi = Factor([X],0.0)
             for j,mb in enumerate(b):
                 qij = mb.theta.condition(x)
-                qij -= mb.msgFwd if mb.parent is None else mb.msgFwd.condition(x)
+                qij = qij - (mb.msgFwd if mb.parent is None else mb.msgFwd.condition(x))  ## was inplace
                 for c in mb.children: qij += c.msgFwd.condition(x)
-                qij -= qij.max()
-                qij *= 1.0 / mb.weight
-                qij.expIP()
-                qij *= mb.weight
-                qi += qij
-            qi /= qi.sum()   # normalize (should be already)
+                qij = qij - qij.max()
+                qij = qij * 1.0 / mb.weight
+                qij = qij.exp()
+                qij = qij * mb.weight
+                qi = qi + qij
+            qi = qi / qi.sum()   # normalize (should be already)
             xval = qi.sample(Z=1.0)[0]
             x[X] = xval
-            logQx += np.log( qi[xval] )
+            logQx += np.log( float(qi[xval]) )  
         return x,logQx
 
 

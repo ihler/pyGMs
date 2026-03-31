@@ -7,23 +7,32 @@ Version 0.1.1 (2022-04-06)
 (c) 2015 Alexander Ihler under the FreeBSD license; see license.txt for details.
 """
 
+import os
+os.environ["PYGMS_USE_TORCH"] = "1"
+
 import unittest
 import numpy as np
 import sys
-sys.path.append('../../')
+sys.path.insert(0,'../')
+import pyGMs
+print(pyGMs)
 from pyGMs import *
 
 def eq_tol(F,G,tolerance):
   if (F.nvar != G.nvar) or (F.vars != G.vars):
     return False
   for x in range(F.numel()):
-    if (not (np.isnan(F[x]) and np.isnan(G[x]))) and (np.abs(F[x]-G[x]) > tolerance):
+    f,g = float(F[x]),float(G[x])
+    if (not (np.isnan(f) and np.isnan(g))) and (np.abs(f-g) > tolerance):
       return False
   return True
 
 
+def log(a): return np.log(float(a))
 
-tol = 1e-5
+
+tol = 1e-4
+tol2 = 1e-2  # Wildcatter; big numbers
 
 class testGraphModel(unittest.TestCase):
 
@@ -92,12 +101,12 @@ class testGraphModel(unittest.TestCase):
     flist.append( Factor( [x[1],x[4]] , [0.46,1.51,0.97,1.17,1.21,0.76,0.81,1.82,1.32,1.48,1.56,1.07,0.80,0.93,0.74] ) )
     gmo = GraphModel(flist)
     jt = flist[0]*flist[1]*flist[2]*flist[3]
-    self.assertTrue( abs(        jt[(0,0,0,0)]  - gmo.value(   [0,0,0,0,0]) ) < tol )
-    self.assertTrue( abs( np.log(jt[(0,0,0,0)]) - gmo.logValue([0,0,0,0,0]) ) < tol )
-    self.assertTrue( abs(        jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )
-    self.assertTrue( abs( np.log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
-    self.assertTrue( abs(        jt[(0,2,1,3)]  - gmo.value(   [0,2,1,0,3]) ) < tol )
-    self.assertTrue( abs( np.log(jt[(0,2,1,3)]) - gmo.logValue([0,2,1,0,3]) ) < tol )
+    self.assertTrue( abs(     jt[(0,0,0,0)]  - gmo.value(   [0,0,0,0,0]) ) < tol )
+    self.assertTrue( abs( log(jt[(0,0,0,0)]) - gmo.logValue([0,0,0,0,0]) ) < tol )
+    self.assertTrue( abs(     jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )
+    self.assertTrue( abs( log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
+    self.assertTrue( abs(     jt[(0,2,1,3)]  - gmo.value(   [0,2,1,0,3]) ) < tol )
+    self.assertTrue( abs( log(jt[(0,2,1,3)]) - gmo.logValue([0,2,1,0,3]) ) < tol )
 
 
 
@@ -167,16 +176,16 @@ class testGraphModel(unittest.TestCase):
     gmo.condition({0:1})
     self.assertEqual( len(gmo.factorsWith(1)) , 2 )           # check factor structure of conditional
     self.assertEqual( gmo.factorsWith(1)[0].vars , VarSet([x[1]]) )  
-    self.assertTrue( abs(        jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )  # consistent assign of x0 = no change
-    self.assertTrue( abs( np.log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
+    self.assertTrue( abs(     jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )  # consistent assign of x0 = no change
+    self.assertTrue( abs( log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
     self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x0 should produce 0.0
 
     gmo = GraphModel(flist)
     jt = flist[0]*flist[1]*flist[2]*flist[3]
     gmo.condition({4:1, 2:0})
-    self.assertTrue( abs(        jt[(1,2,0,1)]  - gmo.value(   [1,2,0,0,1]) ) < tol )  # consistent assign x2,4 = no change
-    self.assertTrue( abs( np.log(jt[(1,2,0,1)]) - gmo.logValue([1,2,0,0,1]) ) < tol )
-    self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
+    self.assertTrue( abs(     jt[(1,2,0,1)]  - gmo.value(   [1,2,0,0,1]) ) < tol )  # consistent assign x2,4 = no change
+    self.assertTrue( abs( log(jt[(1,2,0,1)]) - gmo.logValue([1,2,0,0,1]) ) < tol )
+    self.assertEqual(gmo.value([0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
 
 
   # unittests condition() function : valid config & invalid config
@@ -192,16 +201,16 @@ class testGraphModel(unittest.TestCase):
     gmo.condition2([x[0]],[1])
     self.assertEqual( len(gmo.factorsWith(1)) , 2 )           # check factor structure of conditional
     self.assertEqual( gmo.factorsWith(1)[0].vars , VarSet([x[1]]) )  
-    self.assertTrue( abs(        jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )  # consistent assign of x0 = no change
-    self.assertTrue( abs( np.log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
-    self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x0 should produce 0.0
+    self.assertTrue( abs(     jt[(1,2,0,2)]  - gmo.value(   [1,2,0,0,2]) ) < tol )  # consistent assign of x0 = no change
+    self.assertTrue( abs( log(jt[(1,2,0,2)]) - gmo.logValue([1,2,0,0,2]) ) < tol )
+    self.assertEqual(gmo.value([0,0,0,0,0]), 0.0 )   # incorrect assignment of x0 should produce 0.0
 
     gmo = GraphModel(flist)
     jt = flist[0]*flist[1]*flist[2]*flist[3]
     gmo.condition2([x[4],x[2]],[1,0])
-    self.assertTrue( abs(        jt[(1,2,0,1)]  - gmo.value(   [1,2,0,0,1]) ) < tol )  # consistent assign x2,4 = no change
-    self.assertTrue( abs( np.log(jt[(1,2,0,1)]) - gmo.logValue([1,2,0,0,1]) ) < tol )
-    self.assertEqual(gmo.value(   [0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
+    self.assertTrue( abs(     jt[(1,2,0,1)]  - gmo.value(   [1,2,0,0,1]) ) < tol )  # consistent assign x2,4 = no change
+    self.assertTrue( abs( log(jt[(1,2,0,1)]) - gmo.logValue([1,2,0,0,1]) ) < tol )
+    self.assertEqual(gmo.value([0,0,0,0,0]), 0.0 )   # incorrect assignment of x4 should produce 0.0
 
 
   # unittests eliminate() function
@@ -268,20 +277,20 @@ class testGraphModel(unittest.TestCase):
     bn.eliminate([Z],sumElim)
 
     self.assertTrue( bn.joint().argmax() == (1,1,1,0) )
-    self.assertTrue( bn.joint().max() == 230000 )
+    self.assertTrue( abs( bn.joint().max() - 230000.)< tol2 )
 
     bn2 = GraphModel(factors)
     bn2.eliminate([O,R,D,Z], sumElim)
     self.assertTrue( bn2.joint().argmax() == (1,1,1,0) )
-    self.assertTrue( bn2.joint().max() == 230000 )
+    self.assertTrue( abs(bn2.joint().max()- 230000) < tol2 )
 
     bn3 = GraphModel(factors)
     bn3.condition2([T,D0,D1,D2],[0,1,1,1])
-    self.assertTrue( bn3.joint().sum() == 230000 )
+    self.assertTrue( abs(bn3.joint().sum() - 230000) < tol2 )
      
-    bn3 = GraphModel(factors)
-    bn3.condition2([T,D0,D1,D2],[0,0,0,0])
-    self.assertTrue( bn3.joint().sum() == 210000 )
+    bn4 = GraphModel(factors)
+    bn4.condition2([T,D0,D1,D2],[0,0,0,0])
+    self.assertTrue( abs( bn4.joint().sum() - 210000) < tol2 )
      
 
 

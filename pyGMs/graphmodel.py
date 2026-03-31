@@ -152,19 +152,23 @@ class GraphModel(object):
     """Evaluate F(x) = \\prod_r f_r(x_r) for some (full) configuration x.
          If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
-    if not _is2D(x): x=[x]
+    was2D = _is2D(x)
+    if not was2D: x = [x]  # make 2D
     factors = self.factors if subset==None else self.factorsWithAny(subset)
-    if self.isLog: return np.exp( np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1) )
-    else:          return np.prod( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
+    if self.isLog: ret = np.exp( np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1) )
+    else:          ret = np.prod( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
+    return ret if was2D else ret[0]
 
   def logValue(self,x,subset=None): 
     """Evaluate log F(x) = \\sum_r log f_r(x_r) for some (full) configuration x.
          If optional subset != None, uses *only* the factors in the Markov blanket of subset.
     """
-    if not _is2D(x): x=[x]
+    was2D = _is2D(x)
+    if not was2D: x = [x]  # make 2D
     factors = self.factors if subset==None else self.factorsWithAny(subset)
-    if self.isLog: return np.sum( [[ f.valueMap(xx) for f in factors ] for xx in x] ,1)
-    else:          return np.sum( [[ np.log(f.valueMap(xx)) for f in factors] for xx in x] ,1)
+    if self.isLog: ret = [ sum([ f.valueMap(xx) for f in factors ]) for xx in x]
+    else:          ret = [ sum([ lnf.valueMap(xx) for f in factors for lnf in [f.log()]]) for xx in x]
+    return ret if was2D else ret[0]
 
   ###################################################
   ## Modifying graph structure & cliques
@@ -237,6 +241,13 @@ class GraphModel(object):
     for v in vs: flist.update( self.factorsByVar[v] )
     return flist
 
+  def factorsWithOnly(self,vs):
+    """Get the list of all factors that include only variables in the list vs"""
+    flist = self.factorsWithAny(vs)
+    for f in list(flist):
+      if not f.v <= vs: flist.remove(f) 
+    return flist
+  
   def factorsWithAll(self,vs):
     """Get the list of all factors that include all variables in the list vs"""
     if (len(vs)==0): return self.factors.copy()
@@ -270,7 +281,7 @@ class GraphModel(object):
     topo_order = bnOrder(self)                              # TODO: allow user-provided order and check?
     if topo_order is None: return False
     # Now check to make sure each factor is a CPT for its last variable
-    pri = np.zeros((len(topo_order),))-1
+    pri = np.zeros((max(topo_order)+1,))-1
     pri[topo_order] = np.arange(len(topo_order))
     found  = [ 1 if x.states <= 1 else 0 for x in self.X ]  # track which variables have CPTs
     for f in self.factors:
@@ -299,8 +310,8 @@ class GraphModel(object):
         self.removeFactors([f])
         fc = f.condition({v:x})                       
         if (fc.nvar == 0):
-          if self.isLog: constant += fc[0]            # if it's now a constant, just pull it out 
-          else:          constant += np.log(fc[0])
+          if self.isLog: constant += float(fc)            # if it's now a constant, just pull it out 
+          else:          constant += np.log(float(fc))
         else: 
           self.addFactors([fc],copy=False)            # otherwise add the factor back to the model
       # add delta f'n factor for each variable, and distribute any constant value into this factor
@@ -336,8 +347,12 @@ class GraphModel(object):
       if len(flist):
         F = flist[0].copy()
         for f in self.factorsWith(v)[1:]: 
-          if self.isLog: F += f
-          else:          F *= f
+          if f.requires_grad or F.requires_grad: 
+            if self.isLog: F = F+f
+            else:          F = F*f   
+          else:
+            if self.isLog: F += f
+            else:          F *= f
         self.removeFactors(flist)
         F = elimOp(F, [v])
         try:
@@ -352,8 +367,12 @@ class GraphModel(object):
     """Compute brute-force joint function F(x) = \\prod_r f_r(x_r) as a (large) factor"""
     F = self.factors[0].copy()
     for f in self.factors[1:]: 
-      if self.isLog: F += f
-      else:          F *= f   
+      if f.requires_grad or F.requires_grad:
+        if self.isLog: F = F+f
+        else:          F = F*f   
+      else:
+        if self.isLog: F += f
+        else:          F *= f   
     return F
 
   def connectedComponents(self):
@@ -390,7 +409,23 @@ class GraphModel(object):
  
   # "MRF" object (variable dependencies only)?  
 
+  def parameters(self):
+    leaves,visited = set(),set()
 
+    def traverse(grad_fn):
+      if grad_fn is None or grad_fn in visited: return
+      visited.add(grad_fn)
+      if "AccumulateGrad" in str(type(grad_fn)):  # AccumulateGrad nodes point to leaf params
+        leaves.add(grad_fn.variable)
+      if hasattr(grad_fn, 'next_functions'):      # Recursively follow gradient through computation
+        for next_fn, _ in grad_fn.next_functions: traverse(next_fn)
+
+    for f in self.factors: 
+      if f.requires_grad: 
+        if f.t.grad_fn is not None: traverse(f.t.grad_fn)
+        else: leaves.add(f.t)
+        
+    return leaves
 
 
 

@@ -82,6 +82,9 @@ class euFactor(object):
     def nvar(self):
         return len(self.prob.v | self.util.v)
 
+    @property
+    def requires_grad(self): return self.prob.requires_grad or self.util.requires_grad
+
     # @property
     # def u_div_p_from_log(self):
     #     A = exp_v(self.util)

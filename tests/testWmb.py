@@ -10,7 +10,9 @@ Version 0.1.1 (2022-04-06)
 import unittest
 import numpy as np
 import sys
-sys.path.append('../../')
+sys.path.insert(0,'../')
+import pyGMs as gm
+print(gm)
 from pyGMs import *
 import pyGMs.wmb as wmb
 
@@ -86,7 +88,7 @@ class testGraphModel(unittest.TestCase):
 
     w = []
     for s in range(1000):
-        q,x = inf.sample()
+        x,q = inf.sample()
         w.append( model.logValue(x) - q )
 
     w = np.array(w)

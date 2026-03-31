@@ -510,7 +510,7 @@ def fit_logregL1(data, C=.01):
         lr = LogisticRegression(penalty='l1',C=C,solver='liblinear').fit(XtmpE.T,XtrE[i,:])
         nbrs[i] = np.where(np.abs(lr.coef_) > 1e-6)[1]
         th_ij[i]= lr.coef_[0,nbrs[i]]/2.
-        th_i[i] = lr.intercept_/2.
+        th_i[i] = lr.intercept_[0]/2.
         XtrE[:,-2:] = 0     # blank out "pseudo" data
         XtmpE[i,:] = XtrE[i,:]; # & restore after
     

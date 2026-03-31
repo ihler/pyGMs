@@ -10,15 +10,20 @@ Version 0.1.1 (2022-04-06)
 import unittest
 import numpy as np
 import sys
-sys.path.insert(0,'../')  # Use local version of pyGMs for testing
-import pyGMs
+sys.path.insert(0,'../')
+
+import os
+os.environ["PYGMS_USE_TORCH"] = "1"
+
 from pyGMs import *
+#from pyGMs.factorTorch import Factor
 
 def eq_tol(F,G,tolerance):
     if (F.nvar != G.nvar) or (F.vars != G.vars):
         return False
     for x in range(F.numel()):
-        if (not (np.isnan(F[x]) and np.isnan(G[x]))) and (np.abs(F[x]-G[x]) > tolerance):
+        f,g = float(F[x]),float(G[x])
+        if (not (np.isnan(f) and np.isnan(g))) and (np.abs(f-g) > tolerance):
             return False
     return True
 
@@ -89,6 +94,7 @@ class testFactor(unittest.TestCase):
         self.assertEqual(F7.vars , VarSet())
 
         F8 = Factor( [x[0],x[4]] , [0.450,0.620,0.80,0.930,0.740,0.180,0.410,0.940,0.920,0.420] )
+        #F8 = Factor( [x[0],x[4]] , [0.45, 0.8 , 0.74, 0.41, 0.92, 0.62, 0.93, 0.18, 0.94, 0.42] )
         self.assertEqual(F8.nvar , 2, msg='{} should be 2'.format(F8.nvar))
         self.assertEqual(F8.numel() , 2*5 )
         self.assertEqual( F8[(0,0)] , 0.45 )
@@ -126,7 +132,7 @@ class testFactor(unittest.TestCase):
     def testPermutedConstructor(self):
         x = [ Var(0,2), Var(1,3), Var(2,2), Var(3,2), Var(4,5) ]
         F0 = Factor( [x[0],x[4]] , [0.450,0.620,0.80,0.930,0.740,0.180,0.410,0.940,0.920,0.420] )
-        t_ = F0.t.transpose()
+        t_ = F0.t.T.numpy()
         F1 = Factor( [x[4],x[0]], t_)
         self.assertEqual( F1[(0,0)] , 0.45 )
         self.assertEqual( F1[(0,1)] , 0.80 )

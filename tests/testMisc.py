@@ -12,8 +12,9 @@ Version 0.1.1 (2022-04-06)
 import unittest
 import numpy as np
 import sys
-sys.path.append('../../')
+sys.path.insert(0,'..')
 import pyGMs as gm
+print(gm)
 
 def eq_tol(F,G,tolerance):
         if (F.nvar != G.nvar) or (F.vars != G.vars):
@@ -41,6 +42,7 @@ D = np.array([[1,1,1,0,1,1,0,0,1,1,1,1,1,1,0,0,1,0,0,0,0,0,1,1,1,0,0,1,1,1,0,1,0
   0,1,1,1,1,1,1,1,1,1,0,1,0,0,1,1,0,0,1,0,0,1,0,0,1,1,0,1,0,0,0,1,0,0,1,0,0,0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,1,0,1]]).T
 
 
+X = [ gm.Var(0,2), gm.Var(1,3), gm.Var(2,2), gm.Var(3,4), gm.Var(4,2) ]
 phat = gm.misc.empirical( [ [X[1]] , X[0:2] , [X[1],X[3],X[4]] ], D )
 ptrue= [np.array([29,32,39]), np.array([[13,12,17],[16,20,22]]), 
         np.array([[[5,7],[0,4],[3,2],[3,5]],[[2,7],[2,3],[3,6],[4,5]],[[6,2],[4,4],[5,2],[8,8]]])]

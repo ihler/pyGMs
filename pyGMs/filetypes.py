@@ -19,17 +19,28 @@ from builtins import range
 
 
 
-def readFileByTokens(path, specials=[], escape=True):
+def readFileByTokens(file, specials=[], escape=True):
   """Helper function for parsing pyGMs file formats
     specials : list of tokens to split on (in addition to whitespace, '\s')
     escape   : escape any specials; if False, interpret specials directly as regular expressions
   """
+  import pathlib
   import re
+
   if escape: specials = [re.escape(s) for s in specials]
   spliton = '([\s])'
   if len(specials): spliton += '|'+'|'.join(['('+s+')' for s in specials])
-  with open(path, 'r') as fp:
-    for line in fp:
+
+  if isinstance(file, (str,pathlib.Path)):
+    with open(file, 'r') as fp:
+      yield from _extract_tokens(fp, spliton)
+  else:
+      yield from _extract_tokens(file, spliton)
+
+
+def _extract_tokens(lines, spliton):
+    import re
+    for line in lines:
       tok = [t.strip() for t in re.split(spliton,line) if t and not t.isspace()]
       for t in tok: yield t
 
@@ -286,7 +297,7 @@ def readErgo(filename):
   cliques = [ None ] * nCliques
   for c in range(nCliques):         #   and their variables / scopes
     cSize = int(next(gen))           #   (number of parents)
-    cliques[c] = [int(next(gen)) for i in range(cSize)]+[c] # (clique is Xc + parents)
+    cliques[c] = [int(next(gen))-1 for i in range(cSize)]+[c] # (clique is Xc + parents; use 0-based indexing)
   factors = [ None ] * nCliques
   for c in range(nCliques):         # now read in the conditional probabilities
     tSize = int(next(gen))           #   (# of entries in table = # of states in scope)
@@ -677,7 +688,84 @@ def writeOrder(filename,order):
     with open(filename,'w') as fp:
         fp.write("{} ".format(len(order)));
         fp.write(" ".join(map(str,order)));
-  
+ 
 
+ 
+def readBif(file):
+  import pathlib
+  if isinstance(file, (str,pathlib.Path)):
+    with open(file, 'r') as fp:
+      return _parseBif(fp.read())
+  else:
+    return _parseBif(file.read())
 
+def _parseBif(content):
+    import re
 
+    # 1. Extract Variables and their states
+    # Pattern: variable "Name" { type discrete [ num ] { state0, state1 }; }
+    var_pattern = re.compile( r'variable\s+"?(\w+)"?\s+\{\s*type\s+discrete\s*\[\s*\d+\s*\]\s*\{\s*([^}]+)\s*\}\s*;?\s*\}', re.DOTALL) 
+    
+    variables = {}
+    state_to_idx = {}   # Var_Name -> { "StateName": index }
+    names, labels = [],[]
+    
+    for i, (name, states_str) in enumerate(var_pattern.findall(content)):
+        states = [s.strip().strip('"') for s in states_str.split(',')]
+        variables[name] = Var(i, len(states))
+        state_to_idx[name] = {state: idx for idx, state in enumerate(states)}
+        names.append(name)
+        labels.append(states) 
+    
+    # 2. Extract Probability Blocks
+    # Pattern: probability ( child | parent1, parent2 ) { values / table ... }
+    prob_pattern = re.compile(r'probability\s*\(\s*([^)]+)\s*\)\s*\{([^}]+)\}', re.DOTALL)
+    prob_blocks = prob_pattern.findall(content)
+    
+    factors = []
+    
+    for header, body in prob_blocks:
+        parts = [p.strip().strip('"') for p in re.split(r'\||,', header)]
+        child_name = parts[0]
+        parent_names = parts[1:]
+        
+        child_var = variables[child_name]
+        parent_vars = [variables[p] for p in parent_names]
+        
+        # Define scope: [Parents..., Child] to match BIF logic
+        scope = parent_vars + [child_var]
+        dims = [v.states for v in scope]
+        cpt_data = np.zeros(dims)
+
+        # 3. Check for 'table' vs 'explicit assignments'
+        if 'table' in body:
+            # Standard flat table logic
+            values_str = body.split('table')[-1].replace(';', '').replace(',', ' ')
+            values = np.array([float(x) for x in re.findall(r'[+-]?\d*\.?\d+(?:[eE][+-]?\d+)?', values_str)])
+            cpt_data = values.reshape(dims)
+        else:
+            # Explicit assignment logic: (state1, state2) 0.1, 0.9;
+            # Match: ( ParentStates ) Probabilities ;
+            entry_pattern = re.compile(r'\(([^)]+)\)\s*([^;]+);')
+            
+            for parent_states_str, probs_str in entry_pattern.findall(body):
+                # Convert state names to indices
+                p_states = [s.strip().strip('"') for s in parent_states_str.split(',')]
+                # Get indices for parents in the order they appear in the header
+                indices = tuple(state_to_idx[p_name][p_state] 
+                               for p_name, p_state in zip(parent_names, p_states))
+                
+                # Extract the child probabilities for this parent configuration
+                probs = [float(x) for x in re.findall(r'[+-]?\d*\.?\d+(?:[eE][+-]?\d+)?', probs_str)]
+                
+                # Assign to the CPT: cpt_data[parent_idx1, parent_idx2, :] = [p1, p2...]
+                cpt_data[indices] = probs
+
+        f = Factor(scope, cpt_data)
+        factors.append(f)
+
+    return factors,names,labels
+
+# Example Usage:
+# model = parse_bif('alarm.bif')
+# print(f"Loaded model with {len(model.factors)} factors.")

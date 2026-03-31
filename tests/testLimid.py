@@ -10,7 +10,9 @@ Version 0.1.1 (2022-04-06)
 import unittest
 import numpy as np
 import sys
-sys.path.append('../../')
+sys.path.insert(0,'../')
+import pyGMs as gm
+print(gm)
 from pyGMs import *
 
 def eq_tol(F,G,tolerance):
@@ -92,14 +94,15 @@ class testLimid(unittest.TestCase):
   def setUp(self):
     return
 
-  def testValuation1(self):
-    from valuation import Valuation, factor_to_valuation
+  def testEUFactor(self):
+    from pyGMs.decisions import euFactor
     C,D,U = Wildcatter()
 
-    valuations = [factor_to_valuation(f,'P',False) for f in C] + \
-             [factor_to_valuation(u,'U',False) for u in U]
-    info_arcs = [factor_to_valuation(Factor(d,1.),'P',False) for d in D]
-    modelU = GraphModel( valuations + info_arcs )
+    factors = [euFactor(prob=f) for f in C] + \
+              [euFactor(util=u) for u in U]
+
+    info_arcs = [euFactor(prob=Factor(d,1.)) for d in D]
+    modelU = GraphModel( factors + info_arcs )
 
     modelU.eliminate([2],'sum')
     modelU.eliminate([0],'max')
@@ -109,13 +112,13 @@ class testLimid(unittest.TestCase):
 
 
   def testValuation2(self):
-    from valuation import Valuation, factor_to_valuation
+    from pyGMs.decisions import euFactor
     C,D,U = Pigs(False)
     
-    valuations = [factor_to_valuation(f,'P',False) for f in C] + \
-             [factor_to_valuation(u,'U',False) for u in U]
-    info_arcs = [factor_to_valuation(Factor(d,1.),'P',False) for d in D]
-    modelU = GraphModel( valuations + info_arcs )
+    factors = [euFactor(prob=f) for f in C] + \
+              [euFactor(util=u) for u in U]
+    info_arcs = [euFactor(prob=Factor(d,1.)) for d in D]
+    modelU = GraphModel( factors + info_arcs )
     
     modelU.eliminate([0,1,2,3],'sum')  # cannot observe pig's true health
     modelU.eliminate([9],'max')    # solve for the optimal policy at time 3
